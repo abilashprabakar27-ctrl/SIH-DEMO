@@ -62,7 +62,7 @@ def test_demo_b(client, as_):
                        json={"action": "RESPOND", "note": "Student joined us on 1 Sep; previous institution recorded transfer."}
                        ).json()["status"] == "RESPONDED"
     res = client.post(f"/api/v1/issues/{d003['id']}/actions", headers=a,
-                      json={"action": "RESOLVE", "note": "Transfer confirmed by both sides."}).json()
+                      json={"action": "RESOLVE", "note": "Transfer confirmed by both sides.", "outcome": "DATA_CORRECTED"}).json()
     assert res["status"] == "RESOLVED" and [h["action"] for h in res["history"]][-1] == "RESOLVE"
 
     # Godavari cancels 4 admissions -> C001 clears with a logged system event

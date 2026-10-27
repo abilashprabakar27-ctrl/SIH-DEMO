@@ -66,7 +66,7 @@ class Settings:
         self.max_upload_rows = 5000
         self.current_year = os.environ.get("CURRENT_ACADEMIC_YEAR", "2026-27")
         self.submission_deadline = os.environ.get("SUBMISSION_DEADLINE", "2026-11-30")
-        self.adapter_mode = os.environ.get("APAAR_ADAPTER_MODE", "simulated")  # simulated | unavailable
+        self.adapter_mode = os.environ.get("APAAR_ADAPTER", os.environ.get("APAAR_ADAPTER_MODE", "simulated")).lower()
         self.app_env = os.environ.get("APP_ENV", "development").lower()
         self.live_events = os.environ.get("LIVE_EVENTS", "0" if ON_VERCEL else "1") == "1"
         self.frontend_dist = Path(os.environ.get("FRONTEND_DIST", REPO_ROOT / "frontend" / "dist"))

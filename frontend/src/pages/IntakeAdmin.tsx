@@ -9,9 +9,12 @@ export default function IntakeAdmin() {
   const [inst, setInst] = useState("");
   const insts = useApi<any[]>("/api/v1/institutions");
   const progs = useApi<any[]>(`/api/v1/programmes?academic_year=${year}${inst ? `&institution_id=${inst}` : ""}`, [year, inst]);
+  const rules = useApi<any[]>("/api/v1/rule-sets");
   const [edit, setEdit] = useState<Record<string, { intake: string; ref: string }>>({});
   const [cap, setCap] = useState<{ intakeId: string; cat: string; seats: string; source: string } | null>(null);
   const [err, setErr] = useState<ApiError | null>(null);
+  const [impact, setImpact] = useState<any>(null);
+  const [activationReason, setActivationReason] = useState("");
   const [toast, show] = useToast();
 
   async function saveIntake(p: any) {
@@ -39,6 +42,25 @@ export default function IntakeAdmin() {
       setErr(ex as ApiError);
     }
   }
+  async function previewImpact(ruleSet: any) {
+    setErr(null);
+    try {
+      const result = await api<any>(`/api/v1/rule-sets/${ruleSet.id}/impact`, { method: "POST" });
+      setImpact({ ruleSet, result });
+      setActivationReason("");
+    } catch (ex) { setErr(ex as ApiError); }
+  }
+  async function activateRuleSet() {
+    if (!impact || activationReason.trim().length < 5) return;
+    setErr(null);
+    try {
+      await api(`/api/v1/rule-sets/${impact.ruleSet.id}/activate`, { method: "POST", body: { reason: activationReason } });
+      show(`${impact.ruleSet.code} v${impact.ruleSet.version} activated. Unlocked programme caps were recalculated and reviewed.`);
+      setImpact(null);
+      rules.reload(true);
+      progs.reload(true);
+    } catch (ex) { setErr(ex as ApiError); }
+  }
   return (
     <div className="stack">
       <div className="pagehead"><div><h1>Intake and caps</h1>
@@ -49,7 +71,35 @@ export default function IntakeAdmin() {
           <select aria-label="Academic year" style={{ width: "auto" }} value={year} onChange={(e) => setYear(e.target.value)}>{YEARS.map((y) => <option key={y}>{y}</option>)}</select>
         </div></div>
       {toast}
-      <ErrorBox error={err || progs.error} />
+      <ErrorBox error={err || progs.error || rules.error} />
+      <section className="card flat">
+        <h2>Versioned capacity rules</h2>
+        <p className="muted">Sources and effective years are recorded with each version. “Unverified” means the source still needs confirmation.</p>
+        {rules.loading && !rules.data ? <Loading /> : <div className="tablewrap scrollbox"><table>
+          <thead><tr><th>Rule set</th><th>Academic years</th><th>Source</th><th>Status</th><th></th></tr></thead>
+          <tbody>{rules.data?.map((rs: any) => <tr key={rs.id}>
+            <td><strong>{rs.code} v{rs.version}</strong><div className="small muted">{rs.verification_status.toLowerCase()}</div></td>
+            <td>{rs.academic_year_from}–{rs.academic_year_to}</td><td className="small">{rs.source_type}: {rs.source_ref}</td>
+            <td>{rs.status}</td><td>{rs.status === "DRAFT" && <button className="small secondary" onClick={() => previewImpact(rs)}>Preview impact</button>}</td>
+          </tr>)}</tbody>
+        </table></div>}
+      </section>
+      {impact && <section className="card">
+        <h2>Impact preview: {impact.ruleSet.code} v{impact.ruleSet.version}</h2>
+        <p>This activation will supersede any overlapping active rule set and recalculate unlocked programme-years. Overridden caps stay in place. The source status is {impact.ruleSet.verification_status.toLowerCase()}.</p>
+        <p><strong>{impact.result.programmes.length}</strong> programme-years change. Review each proposed cap and any signal that opens or closes before activating.</p>
+        <div className="tablewrap scrollbox"><table><thead><tr><th>Programme</th><th>Year</th><th>Cap changes</th><th>Flags</th></tr></thead>
+          <tbody>{impact.result.programmes.map((p: any) => <tr key={`${p.programme_id}-${p.academic_year}`}>
+            <td>{p.programme_code}</td><td>{p.academic_year}</td>
+            <td>{Object.entries(p.changes).map(([cat, values]: [string, any]) => `${cat}: ${values.current} → ${values.proposed}`).join("; ")}</td>
+            <td>{p.locked ? "Locked year, unchanged" : p.flags_open ? "A capacity signal may open" : p.flags_close ? "A capacity signal may close" : "No flag-state change"}</td>
+          </tr>)}</tbody></table></div>
+        <div className="inline" style={{ marginTop: 16 }}>
+          <div className="field" style={{ flex: "1 1 320px" }}><label>Reason for activation</label><input value={activationReason} onChange={(e) => setActivationReason(e.target.value)} /></div>
+          <button disabled={activationReason.trim().length < 5} onClick={activateRuleSet}>Activate rule set</button>
+          <button className="secondary" onClick={() => setImpact(null)}>Cancel</button>
+        </div>
+      </section>}
       {progs.loading && !progs.data && <Loading />}
       {progs.data && (
         <section className="card flat"><div className="tablewrap scrollbox"><table>

@@ -18,6 +18,7 @@ from ..models import (
     Institution,
     Notification,
     Programme,
+    RecordRevision,
     SeatCheckLog,
     SupernumeraryQuota,
     User,
@@ -86,7 +87,10 @@ def list_programmes(
         quotas = []
         if intake:
             quotas = [{"seat_category": q.seat_category, "cap_seats": q.cap_seats, "percent_basis": q.percent_basis,
-                       "rule_source": q.rule_source} for q in sorted(intake.quotas, key=lambda q: q.seat_category)]
+                       "rule_source": q.rule_source, "source": q.source,
+                       "rule_set_id": q.rule_set_id, "rule_set_version": q.rule_set_version,
+                       "calc": q.calc, "computed_at": q.computed_at.isoformat() if q.computed_at else None}
+                      for q in sorted(intake.quotas, key=lambda q: q.seat_category)]
         out.append({
             "id": p.id, "code": p.code, "name": p.name, "level": p.level, "discipline": p.discipline,
             "institution_id": p.institution_id, "institution_name": p.institution.name,
@@ -94,6 +98,7 @@ def list_programmes(
                 "id": intake.id, "academic_year": academic_year, "approved_intake": intake.approved_intake,
                 "approval_reference": intake.approval_reference,
                 "submitted_at": intake.submitted_at.isoformat() if intake.submitted_at else None,
+                "rule_set": ledger.rule_set_ref(db, intake),
                 "quotas": quotas},
             "position": positions.get(p.id),
         })
@@ -149,13 +154,25 @@ def set_quota(intake_id: str, category: str, body: QuotaIn,
     q = db.execute(select(SupernumeraryQuota).where(SupernumeraryQuota.intake_id == intake_id,
                                                     SupernumeraryQuota.seat_category == category)).scalar_one_or_none()
     if q is None:
-        q = SupernumeraryQuota(intake_id=intake_id, seat_category=category, cap_seats=0, rule_source="")
+        q = SupernumeraryQuota(intake_id=intake_id, seat_category=category, cap_seats=0, rule_source="", version=0)
         db.add(q)
     old = q.cap_seats
     q.cap_seats = body.cap_seats
     q.percent_basis = None
     q.rule_source = "CONFIGURED: " + body.rule_source
+    q.source = "OVERRIDE"
+    q.override_reason = body.rule_source
+    q.override_by = actor.id
+    q.rule_set_id = None
+    q.rule_set_version = None
+    q.entry_id = None
+    q.calc = {"override": True, "cap_seats": body.cap_seats}
+    q.computed_at = utcnow()
+    q.version += 1
     db.flush()
+    db.add(RecordRevision(entity_type="supernumerary_quota", entity_id=q.id, version=q.version,
+                          changes={"cap_seats": {"old": old, "new": body.cap_seats}},
+                          reason=body.rule_source, actor_id=actor.id))
     pos = issues.run_capacity_checks(db, intake.programme_id, intake.academic_year, actor)
     audit.record(db, actor, "quota.set", "supernumerary_quota", q.id,
                  detail={"category": category, "old": old, "new": body.cap_seats})
@@ -200,7 +217,7 @@ def seat_check(body: SeatCheckIn, actor: Actor = Depends(user_or_client), db: Se
         raise ApiError(422, f"{prog.code} has no approved intake for {body.academic_year}.")
     result = ledger.seat_check(pos, body.seat_category, body.count)
     result.update(programme_code=prog.code, academic_year=body.academic_year, seat_category=body.seat_category,
-                  count=body.count)
+                  count=body.count, rule_set=pos.get("rule_set"))
     db.add(SeatCheckLog(programme_id=prog.id, academic_year=body.academic_year, seat_category=body.seat_category,
                         count=body.count, result=result, actor_id=actor.id))
     audit.record(db, actor, "seat.check", "programme", prog.id,

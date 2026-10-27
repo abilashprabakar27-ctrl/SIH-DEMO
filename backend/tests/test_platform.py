@@ -1,6 +1,10 @@
 """Integration API, audit chain, dashboards vs SQL, review priority, rules admin, live events."""
 
 import asyncio
+import os
+import subprocess
+import sys
+from pathlib import Path
 
 from sqlalchemy import func, select, text
 
@@ -182,3 +186,25 @@ def test_system_status_clearly_marks_registry_as_simulated(client, as_):
     assert status["registry"]["mode"] == "SIMULATED"
     assert status["registry"]["production_verification"] is False
     assert status["production_ready"] is False
+
+
+def test_disabled_adapter_schema_has_no_synthetic_registry_table(tmp_path):
+    root = Path(__file__).resolve().parents[2]
+    db_path = tmp_path / "disabled.db"
+    env = dict(os.environ, APAAR_ADAPTER="disabled", APP_ENV="development",
+               DATABASE_URL=f"sqlite:///{db_path}", PYTHONPATH=str(root / "backend"))
+    code = ("from sqlalchemy import inspect; from app.db import init_db,engine; init_db(); "
+            "assert 'sim_apaar_registry' not in inspect(engine).get_table_names()")
+    result = subprocess.run([sys.executable, "-c", code], cwd=root, env=env, capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr
+
+
+def test_production_profile_schema_has_no_synthetic_registry_table(tmp_path):
+    root = Path(__file__).resolve().parents[2]
+    db_path = tmp_path / "production-profile.db"
+    env = dict(os.environ, APAAR_ADAPTER="simulated", APP_ENV="production",
+               DATABASE_URL=f"sqlite:///{db_path}", PYTHONPATH=str(root / "backend"))
+    code = ("from sqlalchemy import inspect; from app.db import init_db,engine; init_db(); "
+            "assert 'sim_apaar_registry' not in inspect(engine).get_table_names()")
+    result = subprocess.run([sys.executable, "-c", code], cwd=root, env=env, capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr

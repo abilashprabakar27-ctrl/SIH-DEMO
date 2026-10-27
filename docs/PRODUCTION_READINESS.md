@@ -6,10 +6,10 @@ This is a prototype gap register based on the checked source and observed behavi
 |---|---|---|---|---|
 | P1 | Official APAAR verification contract, onboarding, credentials and permitted fields | AICTE integration owner | Yes | `SIMULATED` synthetic table only; no official API is implemented. |
 | P2 | AICTE approval and intake source, authoritative feed and correction process | AICTE data owner | Yes | Intake values are prototype-maintained; no official feed. |
-| P3 | Current seat-cap and supernumerary rules, primary source, scope and effective dates | AICTE policy owner | Yes | Existing defaults are hard-coded and unversioned. They are not represented as authoritative. |
+| P3 | Current seat-cap and supernumerary rules, primary source, scope and effective dates | AICTE policy owner | Yes | Versioned prototype rule sets now support source metadata, scope, effective dates and integer calculations. Values remain unverified and are not represented as authoritative. |
 | P4 | Identity matching thresholds, reviewer process, and labelled evaluation data | AICTE review owner | Yes | Heuristic candidate suggestions; decisions require human action. Thresholds are provisional. |
-| P5 | Rule explanation and false-positive outcome taxonomy | AICTE review owner | Yes | Findings identify investigation candidates; metrics and outcome taxonomy are incomplete. |
-| P6 | Import transaction, lock recovery, idempotence and concurrency guarantees | Engineering owner | Yes | Per-row savepoints exist; leases and atomic audit writes are incomplete. |
+| P5 | Rule explanation and false-positive outcome taxonomy | AICTE review owner | Yes | Flags persist calculation evidence, explanation, evidence hash and required human outcome. Rule-specific performance metrics and taxonomy validation remain incomplete. |
+| P6 | Import transaction, lock recovery, idempotence and concurrency guarantees | Engineering owner | Yes | Alembic migration, commit leases/recovery and idempotency expiry are implemented. PostgreSQL concurrency and fault guarantees still require validation. |
 | P7 | Institution authentication, national roles, isolation review and session revocation | Security owner | Yes | Local roles and scoped checks exist; no complete permission matrix or SSO/MFA. |
 | P8 | Consent purpose, notice, minors/guardian process and access-log policy | Privacy owner | Yes | Verification request consent exists; durable consent records are incomplete. To confirm with counsel. |
 | P9 | Retention periods, deletion/archival policy and subject requests | Privacy owner | Yes | No production retention job; retention schedule is to confirm with counsel. |
@@ -25,9 +25,9 @@ This is a prototype gap register based on the checked source and observed behavi
 - `/api/v1/integration/system/status` is a prototype status report, not a compliance certification.
 - CSV parsing accepts UTF-8/UTF-8 BOM and Windows-1252, comma/semicolon delimiters; XLSM, oversized XLSX archives, and external links are rejected.
 - Non-Latin-only names retain a Unicode matching key. Matching remains heuristic and requires review.
-- Capacity rules remain unversioned and require authoritative-source confirmation.
+- Capacity rules have prototype versioning and effective-date metadata, but values and application remain unverified pending an authoritative policy feed.
 - Credentials, consent, audit immutability, role matrix, retention, and end-to-end failure coverage remain production blockers.
 
 ## Deployment gate
 
-Do not set `APP_ENV=production` until a contract-backed live adapter, migrations, database controls, and the P1–P14 decisions are complete. The application deliberately refuses production startup when its configured registry mode is not `live`; this guard does not itself implement a live adapter.
+Do not set `APP_ENV=production` until a contract-backed live adapter, production database controls, and the P1–P14 decisions are complete. An Alembic bootstrap migration now exists; this does not settle production backup/restore, concurrency, or operations requirements. The application deliberately refuses production startup when its configured registry mode is not `live`; this guard does not itself implement a live adapter.

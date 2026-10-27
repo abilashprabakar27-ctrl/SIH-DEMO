@@ -177,6 +177,28 @@ def test_parser_rejects_macro_workbooks():
     assert exc.value.status == 415
 
 
+def test_expired_commit_lease_can_be_recovered(client, as_, db):
+    from datetime import timedelta
+
+    from app.db import utcnow
+    from app.models import ImportJob
+
+    h = as_(STAFF)
+    job_data = upload(client, h, DEMO_A).json()
+    job = db.get(ImportJob, job_data["id"])
+    job.status = "COMMITTING"
+    job.lock_token = "expired-test-lock"
+    job.locked_at = utcnow() - timedelta(minutes=20)
+    job.lock_expires_at = utcnow() - timedelta(minutes=10)
+    db.commit()
+
+    response = client.post(f"/api/v1/imports/{job.id}/recover", headers=h)
+    assert response.status_code == 200, response.text
+    assert response.json()["job"]["status"] == "PARTIALLY_COMMITTED"
+    db.refresh(job)
+    assert job.lock_token is None and job.lock_expires_at is None
+
+
 def test_template_downloads(client, as_):
     h = as_(STAFF)
     r = client.get("/api/v1/imports/template.csv", headers=h)

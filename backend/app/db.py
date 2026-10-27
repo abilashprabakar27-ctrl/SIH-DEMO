@@ -117,9 +117,18 @@ def get_db() -> Iterator[Session]:
 
 
 def init_db() -> None:
-    from . import models  # noqa: F401  (register tables)
+    from alembic import command
+    from alembic.config import Config
 
-    Base.metadata.create_all(engine)
+    from .config import REPO_ROOT
+
+    config = Config(str(REPO_ROOT / "alembic.ini"))
+    command.upgrade(config, "head")
+    from .models import SimRegistryBase
+    if settings.adapter_mode == "simulated" and settings.app_env != "production":
+        SimRegistryBase.metadata.create_all(engine)
+    else:
+        SimRegistryBase.metadata.drop_all(engine)
 
 
 def snapshot_hooks(db: Session) -> tuple[int, int]:

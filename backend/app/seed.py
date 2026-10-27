@@ -24,10 +24,12 @@ from .models import (
     IntegrationClient,
     Programme,
     SimApaarRegistry,
+    SimRegistryBase,
     Student,
     User,
 )
 from .modules import credentials, intake, ledger
+from .modules.capacity_rules import seed_capacity_rules
 from .modules.identity import phonetic_fold, swapped
 from .modules.normalize import TEMPLATE_COLUMNS, name_tokens
 from .modules.rules import seed_rules
@@ -212,8 +214,11 @@ def demo_a_rows() -> list[dict]:
 
 
 def reset_schema() -> None:
+    SimRegistryBase.metadata.drop_all(engine)
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
+    if settings.adapter_mode == "simulated":
+        SimRegistryBase.metadata.create_all(engine)
 
 
 def run(reset: bool = True, write_samples: bool = True, quiet: bool = False) -> dict:
@@ -221,6 +226,8 @@ def run(reset: bool = True, write_samples: bool = True, quiet: bool = False) -> 
         reset_schema()
     else:
         Base.metadata.create_all(engine)
+        if settings.adapter_mode == "simulated":
+            SimRegistryBase.metadata.create_all(engine)
     rng = random.Random(2026)
     gen = Gen(rng)
     for _s, n, d, _g in DEMO_A_PEOPLE + DEMO_B_PEOPLE:
@@ -236,6 +243,7 @@ def run(reset: bool = True, write_samples: bool = True, quiet: bool = False) -> 
     db = SessionLocal()
     try:
         seed_rules(db)
+        seed_capacity_rules(db)
         insts: dict[str, Institution] = {}
         progs: dict[tuple[str, str], Programme] = {}
         for idx, (code, short, _prefix, name, state, region, typ) in enumerate(INSTITUTIONS, start=1):
@@ -377,7 +385,8 @@ def run(reset: bool = True, write_samples: bool = True, quiet: bool = False) -> 
                         add("Linh Tran", date(2007, 10, 3), "F", seat="SN_FN_OCI", nat="FN", country="Vietnam",
                             apaar="", reason="FOREIGN_NATIONAL")
                 files[(short, year)] = rows
-        db.add_all(registry.values())
+        if settings.adapter_mode == "simulated":
+            db.add_all(registry.values())
         db.commit()
 
         stats = {}

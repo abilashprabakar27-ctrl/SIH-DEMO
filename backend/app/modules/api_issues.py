@@ -87,11 +87,12 @@ def get_issue(issue_id: str, actor: Actor = Depends(_issue_actor), db: Session =
 class ActionIn(BaseModel):
     action: str
     note: str = ""
+    outcome: str | None = None
 
 
 @router.post("/{issue_id}/actions")
 def act(issue_id: str, body: ActionIn, actor: Actor = Depends(_issue_actor), db: Session = Depends(get_db)):
     issue = _load(db, issue_id, actor)
-    issues.apply_action(db, issue, actor, body.action, body.note)
+    issues.apply_action(db, issue, actor, body.action, body.note, body.outcome)
     db.commit()
     return get_issue(issue_id, actor, db)

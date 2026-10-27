@@ -6,6 +6,10 @@ measured condition disappears; that is logged as a SYSTEM event and can be reope
 
 from __future__ import annotations
 
+import hashlib
+import json
+from datetime import UTC, datetime
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -13,7 +17,7 @@ from .. import audit
 from ..models import Institution, IssueEvent, Notification, Programme, ValidationIssue
 from ..security import Actor, ApiError
 from . import events, ledger
-from .rules import load_config, remediation_for
+from .rules import ensure_rule_snapshot, load_config, remediation_for
 
 OPEN_STATES = ("OPEN", "CLARIFICATION_REQUESTED", "RESPONDED")
 CLOSED_STATES = ("RESOLVED", "DISMISSED")
@@ -62,10 +66,25 @@ def open_or_update(
         .where(ValidationIssue.rule_id == rule_id, ValidationIssue.dedupe_key == dedupe_key)
         .order_by(ValidationIssue.created_at.desc())
     ).scalars().first()
+    evidence_json = json.dumps(evidence, sort_keys=True, separators=(",", ":"), default=str)
+    evidence_hash = hashlib.sha256(evidence_json.encode()).hexdigest()
+    explanation = {
+        "reason": message,
+        "calculation": evidence,
+        "evidence_hash": evidence_hash,
+        "measured_at": datetime.now(UTC).isoformat(),
+        "interpretation": "This flag identifies a condition for review; it does not establish intent or misconduct.",
+        "recommended_checks": ["Confirm the source records and applicable rule version."],
+        "benign_alternatives": ["A delayed update, correction, or approved exception may explain this result."],
+    }
     if existing is not None:
         if existing.status in OPEN_STATES:
+            if existing.evidence_hash == evidence_hash:
+                return existing
             existing.evidence = evidence
             existing.message = message
+            existing.explanation = explanation
+            existing.evidence_hash = evidence_hash
             db.flush()
             _publish(db, existing, "issue.updated")
         return existing
@@ -80,6 +99,9 @@ def open_or_update(
         academic_year=academic_year,
         message=message,
         evidence=evidence,
+        explanation=explanation,
+        evidence_hash=evidence_hash,
+        rules_snapshot_id=ensure_rule_snapshot(db).id,
         remediation=remediation_for(rule_id),
         status="OPEN",
     )
@@ -224,7 +246,8 @@ NEXT_STATE = {
 }
 
 
-def apply_action(db: Session, issue: ValidationIssue, actor: Actor, action: str, note: str | None) -> ValidationIssue:
+def apply_action(db: Session, issue: ValidationIssue, actor: Actor, action: str, note: str | None,
+                 outcome: str | None = None) -> ValidationIssue:
     if not visible(actor, issue):
         raise ApiError(404, "Not found.")
     if action not in NEXT_STATE:
@@ -233,13 +256,18 @@ def apply_action(db: Session, issue: ValidationIssue, actor: Actor, action: str,
         raise ApiError(403, f"You cannot {action.replace('_', ' ').lower()} this flag in its current state.")
     if not (note or "").strip():
         raise ApiError(422, "Add a note explaining the action.", field="note")
+    valid_outcomes = {"CONFIRMED_ISSUE", "EXPLAINED_NO_ACTION", "DATA_CORRECTED", "FALSE_POSITIVE", "DUPLICATE_OF_ISSUE"}
+    if action in ("RESOLVE", "DISMISS") and outcome not in valid_outcomes:
+        raise ApiError(422, "Choose a resolution outcome.", field="outcome")
     issue.status = NEXT_STATE[action]
     if action in ("RESOLVE", "DISMISS"):
         issue.resolution_note = note
         issue.resolved_by = actor.id
+        issue.resolution_outcome = outcome
     if action == "REOPEN":
         issue.resolution_note = None
         issue.resolved_by = None
+        issue.resolution_outcome = None
     add_event(db, issue, actor.id, actor.role, action, note)
     audit.record(db, actor, f"issue.{action.lower()}", "issue", issue.id, detail={"rule_id": issue.rule_id})
     _notify(db, issue, f"Flag {issue.rule_id} {NEXT_STATE[action].replace('_', ' ').lower()}: {note}")
@@ -287,9 +315,13 @@ def redact(db: Session, issue: ValidationIssue, actor: Actor) -> dict:
         "academic_year": issue.academic_year,
         "message": issue.message,
         "evidence": ev,
+        "explanation": dict(issue.explanation or {}, calculation=ev),
+        "evidence_hash": issue.evidence_hash,
+        "rules_snapshot_id": issue.rules_snapshot_id,
         "remediation": issue.remediation,
         "status": issue.status,
         "resolution_note": issue.resolution_note,
+        "resolution_outcome": issue.resolution_outcome,
         "created_at": issue.created_at.isoformat(),
         "updated_at": issue.updated_at.isoformat() if issue.updated_at else None,
         "allowed_actions": allowed_actions(actor, issue),

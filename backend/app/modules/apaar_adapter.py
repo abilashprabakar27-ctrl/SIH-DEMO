@@ -16,7 +16,7 @@ from typing import Protocol
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..config import settings
+from ..config import REPO_ROOT, settings
 from ..models import SimApaarRegistry
 from .normalize import name_key
 
@@ -24,7 +24,7 @@ MODE = "SIMULATED"
 
 
 @dataclass
-class AdapterResult:
+class RegistryResult:
     status: str  # OK | NOT_FOUND | INACTIVE | NAME_MISMATCH | DOB_MISMATCH | UNAVAILABLE
     mode: str = MODE
     adapter_id: str = "synthetic-registry"
@@ -41,7 +41,11 @@ class RegistryPort(Protocol):
     mode: str
 
     def lookup_many(self, db: Session, ids: list[str]) -> dict[str, SimApaarRegistry]: ...
-    def check(self, rec: SimApaarRegistry | None, full_name: str | None, dob: date | None) -> AdapterResult: ...
+    def check(self, rec: SimApaarRegistry | None, full_name: str | None, dob: date | None) -> RegistryResult: ...
+
+
+# Backward-compatible name for callers and tests written against the prototype adapter.
+AdapterResult = RegistryResult
 
 
 class SimulatedRegistryAdapter:
@@ -59,11 +63,11 @@ class SimulatedRegistryAdapter:
                 out[rec.apaar_id] = rec
         return out
 
-    def check(self, rec: SimApaarRegistry | None, full_name: str | None, dob: date | None) -> AdapterResult:
+    def check(self, rec: SimApaarRegistry | None, full_name: str | None, dob: date | None) -> RegistryResult:
         started = time.monotonic()
-        def result(status: str, **kwargs) -> AdapterResult:
-            return AdapterResult(status, checked_at=datetime.now(UTC),
-                                 latency_ms=int((time.monotonic() - started) * 1000), **kwargs)
+        def result(status: str, **kwargs) -> RegistryResult:
+            return RegistryResult(status, checked_at=datetime.now(UTC),
+                                  latency_ms=int((time.monotonic() - started) * 1000), **kwargs)
         if not self.available:
             return result("UNAVAILABLE", error_code="SIMULATED_OUTAGE")
         if rec is None:
@@ -77,17 +81,60 @@ class SimulatedRegistryAdapter:
         return result("OK", registry_name=rec.full_name, registry_dob=rec.date_of_birth)
 
 
+class DisabledAdapter:
+    mode = "DISABLED"
+    available = False
+
+    def lookup_many(self, _db: Session, _ids: list[str]) -> dict[str, SimApaarRegistry]:
+        return {}
+
+    def check(self, _rec, _full_name: str | None, _dob: date | None) -> RegistryResult:
+        return RegistryResult("UNAVAILABLE", mode=self.mode, adapter_id="disabled", error_code="ADAPTER_DISABLED",
+                              checked_at=datetime.now(UTC))
+
+
+class HttpRegistryAdapter:
+    """Reserved transport boundary; disabled until an official contract is supplied."""
+    mode = "LIVE"
+    available = False
+
+    def __init__(self):
+        contract = REPO_ROOT / "adapters" / "apaar_contract.yaml"
+        status = "PROVISIONAL"
+        if contract.exists():
+            for line in contract.read_text().splitlines():
+                if line.strip().startswith("contract_status:"):
+                    status = line.split(":", 1)[1].strip().upper()
+        if status != "OFFICIAL":
+            self.error_code = "OFFICIAL_CONTRACT_REQUIRED"
+            self.state = "AWAITING"
+        elif not (os.environ.get("APAAR_API_URL") and os.environ.get("APAAR_API_KEY")):
+            self.error_code = "LIVE_CREDENTIALS_REQUIRED"
+            self.state = "AWAITING"
+        else:
+            self.error_code = "LIVE_ADAPTER_NOT_IMPLEMENTED"
+            self.state = "NOT_IMPLEMENTED"
+
+    def lookup_many(self, _db: Session, _ids: list[str]) -> dict[str, SimApaarRegistry]:
+        return {}
+
+    def check(self, _rec, _full_name: str | None, _dob: date | None) -> RegistryResult:
+        return RegistryResult("UNAVAILABLE", mode=self.mode, adapter_id="http-awaiting-contract",
+                              error_code=self.error_code, checked_at=datetime.now(UTC))
+
+
 _override: SimulatedRegistryAdapter | None = None
 
 
 def get_adapter() -> RegistryPort:
     if _override is not None:
         return _override
+    if settings.adapter_mode == "disabled":
+        return DisabledAdapter()
+    if settings.adapter_mode == "http":
+        return HttpRegistryAdapter()
     if settings.adapter_mode not in {"simulated", "unavailable"}:
-        raise RuntimeError(
-            f"APAAR_ADAPTER_MODE={settings.adapter_mode!r} is unsupported; "
-            "this build has no official LIVE adapter."
-        )
+        raise RuntimeError(f"APAAR_ADAPTER={settings.adapter_mode!r} is unsupported.")
     outage = os.environ.get("APAAR_SIM_OUTAGE", "0") == "1"
     return SimulatedRegistryAdapter(available=settings.adapter_mode != "unavailable" and not outage)
 
