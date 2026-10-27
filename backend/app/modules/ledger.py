@@ -13,9 +13,7 @@ from __future__ import annotations
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..db import utcnow
-from ..models import ApprovedIntake, CapacityRuleSet, Enrolment, Programme, SupernumeraryQuota
-from .capacity_rules import caps_from_rule_set, resolve_rule_set
+from ..models import ApprovedIntake, Enrolment, Programme, SupernumeraryQuota
 from .normalize import SUPERNUMERARY
 
 OCCUPYING = ("ACTIVE", "PROVISIONAL")
@@ -120,21 +118,6 @@ def caps_for(db: Session, intake: ApprovedIntake | None) -> dict[str, int]:
     return {q.seat_category: q.cap_seats for q in rows}
 
 
-def rule_set_ref(db: Session, intake: ApprovedIntake | None) -> dict | None:
-    if intake is None:
-        return None
-    quota = db.execute(select(SupernumeraryQuota).where(
-        SupernumeraryQuota.intake_id == intake.id,
-        SupernumeraryQuota.rule_set_id.is_not(None),
-    ).limit(1)).scalar_one_or_none()
-    rule_set = db.get(CapacityRuleSet, quota.rule_set_id) if quota else None
-    if rule_set is None:
-        return None
-    return {"code": rule_set.code, "version": rule_set.version,
-            "verification_status": rule_set.verification_status,
-            "caveat": "Rule source is unverified; confirm against an authoritative source."}
-
-
 def counts_for(db: Session, programme_id: str, academic_year: str) -> dict[str, int]:
     rows = db.execute(
         select(Enrolment.seat_category, func.count())
@@ -156,7 +139,6 @@ def position(db: Session, programme_id: str, academic_year: str) -> dict:
     pos["programme_id"] = programme_id
     pos["academic_year"] = academic_year
     pos["has_intake"] = intake is not None
-    pos["rule_set"] = rule_set_ref(db, intake)
     return pos
 
 
@@ -202,37 +184,25 @@ def all_positions(db: Session, academic_year: str, institution_ids: list[str] | 
             academic_year=academic_year,
             intake_id=intake.id,
             submitted_at=intake.submitted_at.isoformat() if intake.submitted_at else None,
-            rule_set=rule_set_ref(db, intake),
         )
         out.append(pos)
     return out
 
 
 def apply_default_caps(db: Session, intake: ApprovedIntake, programme: Programme) -> None:
-    """(Re)derive caps from the active versioned rule set; preserve explicit overrides."""
-    rule_set = resolve_rule_set(db, intake.academic_year)
-    specs = (caps_from_rule_set(db, rule_set, intake.approved_intake, programme.discipline, programme.level)
-             if rule_set else default_caps(intake.approved_intake, programme.discipline, programme.level))
+    """(Re)derive default caps. Caps configured by AICTE (rule_source not DEFAULT) are kept."""
     existing = {
         q.seat_category: q
         for q in db.execute(select(SupernumeraryQuota).where(SupernumeraryQuota.intake_id == intake.id)).scalars()
     }
-    for cat, spec in specs.items():
-        spec["computed_at"] = utcnow()
+    for cat, spec in default_caps(intake.approved_intake, programme.discipline, programme.level).items():
         q = existing.get(cat)
         if q is None:
             db.add(SupernumeraryQuota(intake_id=intake.id, seat_category=cat, **spec))
-        elif ((q.source != "OVERRIDE" and q.rule_source.startswith("DEFAULT")) or q.source == "RULE_SET"):
-            values = {
-                "cap_seats": spec["cap_seats"], "percent_basis": spec["percent_basis"],
-                "rule_source": spec["rule_source"], "rule_set_id": spec.get("rule_set_id"),
-                "rule_set_version": spec.get("rule_set_version"), "entry_id": spec.get("entry_id"),
-                "calc": spec.get("calc", {}), "source": "RULE_SET",
-            }
-            if any(getattr(q, key) != value for key, value in values.items()):
-                for key, value in values.items():
-                    setattr(q, key, value)
-                q.computed_at = utcnow()
+        elif q.rule_source.startswith("DEFAULT"):
+            q.cap_seats = spec["cap_seats"]
+            q.percent_basis = spec["percent_basis"]
+            q.rule_source = spec["rule_source"]
     db.flush()
 
 

@@ -83,14 +83,11 @@ def _req_view(r: VerificationRequest, for_verifier: bool) -> dict:
     if for_verifier and status == "NO_MATCH":
         status = "PENDING_CONSENT"  # indistinguishable from a real pending request
     expired = utcnow() > r.expires_at
-    out = {"id": r.id, "requester_org": r.requester_org, "purpose": r.purpose, "status": status,
+    return {"id": r.id, "requester_org": r.requester_org, "purpose": r.purpose, "status": status,
             "expired": expired and status == "PENDING_CONSENT", "created_at": r.created_at.isoformat(),
             "expires_at": r.expires_at.isoformat(),
             "consent_decided_at": None if for_verifier and r.status == "NO_MATCH" else
             (r.consent_decided_at.isoformat() if r.consent_decided_at else None)}
-    if not for_verifier:
-        out["consent_hold_reason"] = r.consent_hold_reason
-    return out
 
 
 @router.post("/requests")
@@ -104,14 +101,9 @@ def create_request(body: RequestIn, actor: Actor = Depends(require_roles("VERIFI
     st = db.execute(select(Student).where(Student.apaar_id == aid)).scalar_one_or_none()
     matched = st is not None and st.date_of_birth == dob
     now = utcnow()
-    age = (now.year - st.date_of_birth.year
-           - ((now.month, now.day) < (st.date_of_birth.month, st.date_of_birth.day))) if matched else 18
-    minor_hold = bool(matched and age < 18)
     r = VerificationRequest(requester_id=actor.id, requester_org=actor.user.organisation or actor.user.full_name,
                             student_id=st.id if matched else None, purpose=body.purpose,
-                            status="PENDING_CONSENT" if matched else "NO_MATCH",
-                            consent_hold_reason="GUARDIAN_CONSENT_REQUIRED" if minor_hold else None,
-                            expires_at=now + timedelta(days=7))
+                            status="PENDING_CONSENT" if matched else "NO_MATCH", expires_at=now + timedelta(days=7))
     db.add(r)
     db.flush()
     audit.record(db, actor, "verification.request", "verification_request", r.id,
@@ -146,8 +138,6 @@ def consent(req_id: str, body: ConsentIn, actor: Actor = Depends(require_roles("
         raise ApiError(422, "Decision must be APPROVE or DENY.")
     if r.status != "PENDING_CONSENT":
         raise ApiError(409, f"You already decided this request ({r.status.lower()}).")
-    if r.consent_hold_reason == "GUARDIAN_CONSENT_REQUIRED":
-        raise ApiError(409, "Guardian consent is required; guardian consent workflow is not available in this prototype.")
     if utcnow() > r.expires_at:
         raise ApiError(409, "This request has expired.")
     r.status = "APPROVED" if body.decision == "APPROVE" else "DENIED"

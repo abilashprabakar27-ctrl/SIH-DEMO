@@ -43,9 +43,7 @@ def list_events(action: str | None = None, outcome: str | None = None, actor_rol
     total = db.execute(select(func.count()).select_from(q.subquery())).scalar()
     page_size = max(1, min(page_size, 200))
     rows = db.execute(q.order_by(AuditEvent.seq.desc()).offset((max(page, 1) - 1) * page_size).limit(page_size)).scalars()
-    items = [_view(e) for e in rows]
-    audit.record(db, actor, "audit.read", "audit", None, detail={"rows": len(items), "page": page})
-    return {"items": items, "total": total, "page": page, "page_size": page_size}
+    return {"items": [_view(e) for e in rows], "total": total, "page": page, "page_size": page_size}
 
 
 @router.get("/verify-chain")

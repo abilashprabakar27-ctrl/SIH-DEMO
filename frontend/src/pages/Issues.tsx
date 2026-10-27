@@ -81,7 +81,6 @@ export function IssueDetail() {
   const { id } = useParams();
   const d = useApi<any>(`/api/v1/issues/${id}`, [id]);
   const [note, setNote] = useState("");
-  const [outcome, setOutcome] = useState("EXPLAINED_NO_ACTION");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<ApiError | null>(null);
   const [toast, show] = useToast();
@@ -93,7 +92,7 @@ export function IssueDetail() {
     setBusy(true);
     setErr(null);
     try {
-      d.setData(await api(`/api/v1/issues/${id}/actions`, { body: { action, note, outcome: ["RESOLVE", "DISMISS"].includes(action) ? outcome : undefined } }));
+      d.setData(await api(`/api/v1/issues/${id}/actions`, { body: { action, note } }));
       setNote("");
       show(`${ACTION_LABEL[action]}: done.`);
     } catch (e) {
@@ -109,16 +108,13 @@ export function IssueDetail() {
         <p className="muted">{i.institution_name} · {i.academic_year} · opened {fmtDateTime(i.created_at)}</p></div></div>
       {toast}
       <section className="card"><p style={{ fontSize: 16 }}>{i.message}</p><p className="small muted">How to fix: {i.remediation}</p>
-        <p className="small muted">A flag is a review prompt; it does not establish intent or misconduct.</p>
-        {i.explanation && <div className="banner small"><strong>Why this was flagged:</strong> {i.explanation.reason}<div>{i.explanation.interpretation}</div><div>Evidence hash: <code>{i.evidence_hash}</code> · Rule snapshot: <code>{i.rules_snapshot_id || "legacy"}</code></div></div>}
-        {i.resolution_note && <p className="banner ok small">Closing outcome: {(i.resolution_outcome || "Not recorded").replaceAll("_", " ")} · {i.resolution_note}</p>}</section>
+        {i.resolution_note && <p className="banner ok small">Closing note: {i.resolution_note}</p>}</section>
       <section className="card"><h2>Evidence</h2><Evidence ev={i.evidence} /></section>
       {i.allowed_actions.length > 0 && (
         <section className="card">
           <h2>Take action</h2>
           <ErrorBox error={err} />
           <Field label="Note (required, kept in the history)"><textarea value={note} onChange={(e) => setNote(e.target.value)} /></Field>
-          {i.allowed_actions.some((a: string) => ["RESOLVE", "DISMISS"].includes(a)) && <Field label="Resolution outcome"><select value={outcome} onChange={(e) => setOutcome(e.target.value)}><option value="CONFIRMED_ISSUE">Confirmed issue</option><option value="EXPLAINED_NO_ACTION">Explained, no action</option><option value="DATA_CORRECTED">Data corrected</option><option value="FALSE_POSITIVE">False positive</option><option value="DUPLICATE_OF_ISSUE">Duplicate of another flag</option></select></Field>}
           <div className="row">{i.allowed_actions.map((a: string) => (
             <button key={a} className={a === "DISMISS" ? "secondary" : ""} disabled={busy || !note.trim()} onClick={() => act(a)}>{ACTION_LABEL[a]}</button>
           ))}</div>

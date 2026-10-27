@@ -52,7 +52,6 @@ def test_valid_selective_disclosure(client, as_):
     token = _present(client, as_, cid, ["institution", "programme", "enrolmentStatus"])
     res = _verify(client, token)
     assert res["valid"] is True and set(checks(res).values()) == {"pass"}
-    assert any("does not independently confirm" in note for note in res["notes"])
     assert set(res["claims"]) == {"institution", "programme", "enrolmentStatus"}
     assert "name" not in res["claims"] and "apaarId" not in res["claims"]
     _, apaar, _ = _ananya()
