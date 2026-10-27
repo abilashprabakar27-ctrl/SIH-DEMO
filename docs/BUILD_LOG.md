@@ -21,14 +21,14 @@ Tell the new session: "Continue the build in HANDOFF.md, following docs/BUILD_PR
 ## Status by execution-plan step (BUILD_PROMPT §12)
 | # | Step | State |
 |---|------|-------|
-| 1 | Scaffold, config, DB, models, auth/roles, audit chain | done (code); tests pending |
-| 2 | Seat rules + registry + intake APIs | done (code); tests pending |
-| 3 | Normaliser, rule catalogue (25 rules), engine, simulated adapter, commit path | done (code); tests pending |
-| 4 | Import API, did-you-mean, Excel template | done (code); tests pending |
-| 5 | Issues, review actions, redaction, capacity checks, identity resolution | done (code); tests pending |
-| 6 | Credentials (SD-JWT style), verification, consent, certificate, QR | done (code); tests pending |
-| 7 | Dashboards, review priority, reports, seat-check, SSE, correction requests | done (code); tests pending |
-| 8 | Full seed + sample files | done, runs clean; `scripts/run_demos.py` not yet written |
+| 1 | Scaffold, config, DB, models, auth/roles, audit chain | done + tested |
+| 2 | Seat rules + registry + intake APIs | done + tested |
+| 3 | Normaliser, rule catalogue (25 rules), engine, simulated adapter, commit path | done + tested |
+| 4 | Import API, did-you-mean, Excel template | done + tested |
+| 5 | Issues, review actions, redaction, capacity checks, identity resolution | done + tested |
+| 6 | Credentials (SD-JWT style), verification, consent, certificate, QR | done + tested |
+| 7 | Dashboards, review priority, reports, seat-check, SSE, correction requests | done + tested |
+| 8 | Full seed + sample files + `scripts/run_demos.py` | done; demos A/B/C all PASS against live server |
 | 9 | React frontend + Playwright tour | NOT STARTED |
 | 10 | Docs (README, DEMO_SCRIPT, TEST_REPORT, traceability, API design, gap analysis, .env.example) | NOT STARTED |
 | 11 | Clean-clone validation | NOT STARTED |
