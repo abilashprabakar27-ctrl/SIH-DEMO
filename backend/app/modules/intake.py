@@ -9,6 +9,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
+import zipfile
 from collections import Counter
 from datetime import timedelta
 
@@ -46,7 +47,7 @@ STALE_LOCK = timedelta(minutes=10)
 
 def parse_upload(filename: str, content: bytes) -> list[dict]:
     name = (filename or "").lower()
-    if not (name.endswith(".csv") or name.endswith(".xlsx")):
+    if name.endswith(".xlsm") or not (name.endswith(".csv") or name.endswith(".xlsx")):
         raise ApiError(415, "Upload a .csv or .xlsx file (use the template).")
     if len(content) > settings.max_upload_bytes:
         raise ApiError(413, "The file is larger than 2 MB. Split it into smaller files.")
@@ -54,10 +55,19 @@ def parse_upload(filename: str, content: bytes) -> list[dict]:
         if not content.startswith(b"PK"):
             raise ApiError(415, "This file is not a real Excel (.xlsx) workbook.")
         try:
+            with zipfile.ZipFile(io.BytesIO(content)) as archive:
+                infos = archive.infolist()
+                if len(infos) > 250 or sum(item.file_size for item in infos) > 25 * 1024 * 1024:
+                    raise ApiError(413, "The Excel workbook expands beyond the supported size limit.")
+                if any("externallinks/" in item.filename.lower() for item in infos):
+                    raise ApiError(422, "Excel workbooks with external links are not supported.")
+        except zipfile.BadZipFile as exc:
+            raise ApiError(415, "This file is not a valid .xlsx workbook.") from exc
+        try:
             wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
         except Exception as exc:  # noqa: BLE001
             raise ApiError(422, "The Excel file could not be read. Save it again from Excel and retry.") from exc
-        ws = wb.worksheets[0]
+        ws = next((sheet for sheet in wb.worksheets if sheet.title.casefold() == "students"), wb.worksheets[0])
         it = ws.iter_rows(values_only=True)
         header = next(it, None) or ()
         raw_rows = [list(r) for r in it]
@@ -67,9 +77,17 @@ def parse_upload(filename: str, content: bytes) -> list[dict]:
             raise ApiError(415, "The CSV file contains binary data. Save it as plain CSV (UTF-8).")
         try:
             text = content.decode("utf-8-sig")
-        except UnicodeDecodeError as exc:
-            raise ApiError(422, "The CSV is not UTF-8 encoded. In Excel use 'CSV UTF-8' when saving.") from exc
-        reader = csv.reader(io.StringIO(text))
+        except UnicodeDecodeError:
+            try:
+                text = content.decode("cp1252")
+            except UnicodeDecodeError as exc:
+                raise ApiError(422, "The CSV encoding is not supported. Save it as UTF-8 or Windows-1252.") from exc
+        sample = text[:8192]
+        try:
+            delimiter = csv.Sniffer().sniff(sample, delimiters=",;").delimiter
+        except csv.Error:
+            delimiter = ","
+        reader = csv.reader(io.StringIO(text), delimiter=delimiter)
         header = next(reader, None) or []
         raw_rows = list(reader)
     cols = [canonical_header(h) for h in header]

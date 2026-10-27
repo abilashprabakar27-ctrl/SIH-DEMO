@@ -37,6 +37,11 @@ log = logging.getLogger("apaar")
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    if settings.app_env == "production":
+        raise RuntimeError(
+            "APP_ENV=production is blocked: no contract-backed LIVE APAAR adapter is implemented; "
+            "the prototype only provides SIMULATED registry checks."
+        )
     init_db()
     with SessionLocal() as db:
         seed_rules(db)

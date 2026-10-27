@@ -7,8 +7,11 @@ the same interface. Every result carries mode="SIMULATED".
 
 from __future__ import annotations
 
+import os
+import time
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
+from typing import Protocol
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -24,8 +27,21 @@ MODE = "SIMULATED"
 class AdapterResult:
     status: str  # OK | NOT_FOUND | INACTIVE | NAME_MISMATCH | DOB_MISMATCH | UNAVAILABLE
     mode: str = MODE
+    adapter_id: str = "synthetic-registry"
+    adapter_version: str = "1"
+    checked_at: datetime | None = None
+    latency_ms: int = 0
+    error_code: str | None = None
     registry_name: str | None = None
     registry_dob: date | None = None
+
+
+class RegistryPort(Protocol):
+    """Boundary for registry lookups. A live implementation requires an official contract."""
+    mode: str
+
+    def lookup_many(self, db: Session, ids: list[str]) -> dict[str, SimApaarRegistry]: ...
+    def check(self, rec: SimApaarRegistry | None, full_name: str | None, dob: date | None) -> AdapterResult: ...
 
 
 class SimulatedRegistryAdapter:
@@ -44,26 +60,36 @@ class SimulatedRegistryAdapter:
         return out
 
     def check(self, rec: SimApaarRegistry | None, full_name: str | None, dob: date | None) -> AdapterResult:
+        started = time.monotonic()
+        def result(status: str, **kwargs) -> AdapterResult:
+            return AdapterResult(status, checked_at=datetime.now(UTC),
+                                 latency_ms=int((time.monotonic() - started) * 1000), **kwargs)
         if not self.available:
-            return AdapterResult("UNAVAILABLE")
+            return result("UNAVAILABLE", error_code="SIMULATED_OUTAGE")
         if rec is None:
-            return AdapterResult("NOT_FOUND")
+            return result("NOT_FOUND")
         if not rec.active:
-            return AdapterResult("INACTIVE")
+            return result("INACTIVE")
         if full_name and name_key(full_name) != name_key(rec.full_name):
-            return AdapterResult("NAME_MISMATCH", registry_name=rec.full_name, registry_dob=rec.date_of_birth)
+            return result("NAME_MISMATCH", registry_name=rec.full_name, registry_dob=rec.date_of_birth)
         if dob and dob != rec.date_of_birth:
-            return AdapterResult("DOB_MISMATCH", registry_name=rec.full_name, registry_dob=rec.date_of_birth)
-        return AdapterResult("OK", registry_name=rec.full_name, registry_dob=rec.date_of_birth)
+            return result("DOB_MISMATCH", registry_name=rec.full_name, registry_dob=rec.date_of_birth)
+        return result("OK", registry_name=rec.full_name, registry_dob=rec.date_of_birth)
 
 
 _override: SimulatedRegistryAdapter | None = None
 
 
-def get_adapter() -> SimulatedRegistryAdapter:
+def get_adapter() -> RegistryPort:
     if _override is not None:
         return _override
-    return SimulatedRegistryAdapter(available=settings.adapter_mode != "unavailable")
+    if settings.adapter_mode not in {"simulated", "unavailable"}:
+        raise RuntimeError(
+            f"APAAR_ADAPTER_MODE={settings.adapter_mode!r} is unsupported; "
+            "this build has no official LIVE adapter."
+        )
+    outage = os.environ.get("APAAR_SIM_OUTAGE", "0") == "1"
+    return SimulatedRegistryAdapter(available=settings.adapter_mode != "unavailable" and not outage)
 
 
 def set_adapter(adapter: SimulatedRegistryAdapter | None) -> None:

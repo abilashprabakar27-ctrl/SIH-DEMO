@@ -13,6 +13,7 @@ from app.modules.normalize import name_key
 def test_name_key_and_fold():
     assert name_key("  Sanjana  BALAJI ") == "balaji sanjana"
     assert name_key("Balaji, Sanjana") == "balaji sanjana"
+    assert name_key("श्री राम")
     assert phonetic_fold("mohammed") == phonetic_fold("mohamed")
     assert phonetic_fold("karthik") == phonetic_fold("kartik")
     assert phonetic_fold("deepa") == phonetic_fold("dipa")

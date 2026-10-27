@@ -83,8 +83,11 @@ def canonical_header(h: str) -> str:
 
 
 def name_tokens(name: str) -> list[str]:
-    ascii_ = unicodedata.normalize("NFKD", name or "").encode("ascii", "ignore").decode().lower()
-    return [t for t in re.split(r"[^a-z]+", ascii_) if t]
+    original = unicodedata.normalize("NFKC", name or "").casefold()
+    ascii_ = unicodedata.normalize("NFKD", original).encode("ascii", "ignore").decode().lower()
+    tokens = [t for t in re.split(r"[^a-z]+", ascii_) if t]
+    # Keep a stable Unicode fallback instead of collapsing non-Latin names to an empty key.
+    return tokens or [t for t in re.split(r"[^\w]+", original, flags=re.UNICODE) if t]
 
 
 def name_key(name: str) -> str:
@@ -130,7 +133,8 @@ def clean_cell(value) -> str:
         return value.date().isoformat()
     if isinstance(value, date):
         return value.isoformat()
-    return str(value).strip()
+    text = unicodedata.normalize("NFC", str(value))
+    return re.sub("[\u200b-\u200f\u2060\ufeff]", "", text).strip()
 
 
 def clean_apaar(value: str) -> str:

@@ -97,6 +97,27 @@ def integration_status(actor: Actor = Depends(current_actor)):
     }
 
 
+@router.get("/system/status")
+def system_status(actor: Actor = Depends(current_actor)):
+    """Expose prototype capability states without implying production integrations."""
+    adapter = get_adapter()
+    return {
+        "environment": settings.app_env,
+        "registry": {"mode": "SIMULATED", "available": adapter.available,
+                     "contract_status": "NO_OFFICIAL_CONTRACT", "production_verification": False},
+        "capacity_rules": {"status": "IMPLEMENTED_UNVERSIONED", "source_verification": "UNVERIFIED"},
+        "credentials": {"status": "IMPLEMENTED", "key_registry": "NOT_IMPLEMENTED"},
+        "audit": {"status": "TAMPER_EVIDENT", "database_immutability": False},
+        "imports": {"status": "IMPLEMENTED", "lease_recovery": "NOT_IMPLEMENTED"},
+        "production_ready": False,
+        "production_blockers": [
+            "Official APAAR contract and credentials are unavailable.",
+            "Capacity rule sources and effective dates require verification.",
+            "Credential key lifecycle, privacy review, and production database migration remain incomplete.",
+        ],
+    }
+
+
 # ---------------------------------------------------------------- API keys for institution systems
 
 SCOPES = ("enrolments:write", "seat:check")

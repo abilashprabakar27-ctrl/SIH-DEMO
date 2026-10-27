@@ -175,3 +175,10 @@ def test_api_key_lifecycle(client, as_):
 def test_notifications_listed(client, as_):
     items = client.get("/api/v1/notifications", headers=as_("narmada.admin@demo.local")).json()
     assert items and all({"message", "link", "created_at"} <= set(i) for i in items)
+def test_system_status_clearly_marks_registry_as_simulated(client, as_):
+    response = client.get("/api/v1/integration/system/status", headers=as_("aicte.admin@demo.local"))
+    assert response.status_code == 200
+    status = response.json()
+    assert status["registry"]["mode"] == "SIMULATED"
+    assert status["registry"]["production_verification"] is False
+    assert status["production_ready"] is False

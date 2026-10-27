@@ -156,6 +156,27 @@ def test_upload_rejections(client, as_):
     client.post(f"/api/v1/imports/{r.json()['id']}/discard", headers=h)
 
 
+def test_parser_accepts_semicolon_and_windows_1252():
+    from app.modules.intake import parse_upload
+
+    csv_data = ("apaar_id;institution_student_id;full_name;date_of_birth;gender;nationality_status;"
+                "programme_code;academic_year;seat_category;admission_date\n"
+                ";R1;Jos\xe9 Rao;2008-01-01;M;INDIAN;BTECH-CSE;2026-27;REGULAR;2026-08-01\n")
+    rows = parse_upload("students.csv", csv_data.encode("cp1252"))
+    assert rows[0]["full_name"] == "José Rao"
+
+
+def test_parser_rejects_macro_workbooks():
+    import pytest
+
+    from app.modules.intake import parse_upload
+    from app.security import ApiError
+
+    with pytest.raises(ApiError) as exc:
+        parse_upload("students.xlsm", b"PK\x03\x04")
+    assert exc.value.status == 415
+
+
 def test_template_downloads(client, as_):
     h = as_(STAFF)
     r = client.get("/api/v1/imports/template.csv", headers=h)
