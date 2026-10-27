@@ -1,0 +1,6 @@
+apaar_id,institution_student_id,full_name,date_of_birth,gender,nationality_status,citizenship_country,programme_code,academic_year,seat_category,admission_date,social_category,email,apaar_pending_reason
+922200000001,GEC26CSE901,Sravani Kotha,2008-02-14,F,INDIAN,India,BTECH-CSE,2026-27,REGULAR,2026-09-01,,,
+922200000002,GEC26CSE902,Venkat Rayudu,2007-12-30,M,INDIAN,India,BTECH-CSE,2026-27,REGULAR,2026-09-01,,,
+922200000003,GEC26CSE903,Harsha Vardhan,2008-05-05,M,INDIAN,India,BTECH-CSE,2026-27,REGULAR,2026-09-01,,,
+916000000059,GEC26CSE904,Vivek Agarwl,2007-02-07,M,INDIAN,India,BTECH-CSE,2026-27,REGULAR,2026-09-01,,,
+922200000004,GEC26CSE905,Mounika Reddy,2008-01-19,F,INDIAN,India,BTECH-CSE,2026-27,SN_TFW,2026-09-01,,,
