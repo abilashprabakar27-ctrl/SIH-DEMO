@@ -52,7 +52,7 @@ export default function IntakeAdmin() {
       <ErrorBox error={err || progs.error} />
       {progs.loading && !progs.data && <Loading />}
       {progs.data && (
-        <section className="card flat"><div className="tablewrap"><table>
+        <section className="card flat"><div className="tablewrap scrollbox"><table>
           <thead><tr><th>Institution</th><th>Programme</th><th className="num">Approved intake</th>{CATS.map((c) => <th key={c}>{c.replace("SN_", "").replace("_", "/")} cap</th>)}<th></th></tr></thead>
           <tbody>{progs.data.map((p) => {
             const e = edit[p.id];

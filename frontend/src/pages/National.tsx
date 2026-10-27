@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { CURRENT_YEAR, fmtDate, useApi, useLiveEvents, YEARS } from "../api";
+import { CURRENT_YEAR, fmtDate, useApi, useLiveEvents, liveLabel, YEARS } from "../api";
 import SeatStrip, { SeatLegend } from "../components/SeatStrip";
-import { Badge, Empty, ErrorBox, Figure, Loading } from "../components/ui";
+import { Badge, Empty, ErrorBox, Figure, Loading, Tabs } from "../components/ui";
 
 const NAT_LABEL: Record<string, string> = { INDIAN: "Indian", NRI: "NRI", OCI: "OCI / PIO", FN: "Foreign national" };
 
@@ -21,6 +21,7 @@ export default function National() {
   const [year, setYear] = useState(CURRENT_YEAR);
   const [state, setState] = useState("");
   const [disc, setDisc] = useState("");
+  const [tab, setTab] = useState("overview");
   const d = useApi<any>(`/api/v1/dashboard/national?academic_year=${year}&state=${encodeURIComponent(state)}&discipline=${disc}`, [year, state, disc]);
   const [updated, setUpdated] = useState<string | null>(null);
   const live = useLiveEvents(() => { d.reload(true); setUpdated(new Date().toLocaleTimeString()); });
@@ -37,7 +38,7 @@ export default function National() {
       <div className="pagehead">
         <div><h1>National register</h1><p className="muted">All figures computed from student-level records. Academic year {year}.</p></div>
         <div className="row">
-          <span className="live">{live ? "● Live" : "○ Connecting"}{updated && ` · updated ${updated}`}</span>
+          <span className="live">{liveLabel(live)}{updated && ` · updated ${updated}`}</span>
           <select aria-label="Academic year" style={{ width: "auto" }} value={year} onChange={(e) => setYear(e.target.value)}>{YEARS.map((y) => <option key={y}>{y}</option>)}</select>
           <select aria-label="State" style={{ width: "auto" }} value={state} onChange={(e) => setState(e.target.value)}><option value="">All states</option>{x.states.map((s: string) => <option key={s}>{s}</option>)}</select>
           <select aria-label="Discipline" style={{ width: "auto" }} value={disc} onChange={(e) => setDisc(e.target.value)}>
@@ -54,15 +55,18 @@ export default function National() {
         <Figure k="Seats over intake" v={f.excess_over_intake} tone={f.excess_over_intake ? "bad" : undefined} />
         <Figure k="Programmes over a cap" v={f.programmes_over_cap} tone={f.programmes_over_cap ? "bad" : undefined} />
       </div>
+      <Tabs active={tab} onChange={setTab} tabs={[["overview", "Overview"], ["programmes", `Programmes (${x.programmes.length})`],
+        ["submission", "Submission status"]]} />
+      {tab === "overview" && <>
       <section className="card">
         <div className="row between"><h2>Excess alerts</h2><SeatLegend /></div>
-        {x.excess_alerts.length === 0 ? <Empty>No programme is over intake or over a supernumerary cap.</Empty> : x.excess_alerts.map((p: any) => (
-          <div key={p.programme_id} style={{ borderTop: "1px solid var(--line-2)", paddingTop: 10, marginTop: 10 }}>
+        {x.excess_alerts.length === 0 ? <Empty>No programme is over intake or over a supernumerary cap.</Empty> : <div className="prog-grid">{x.excess_alerts.map((p: any) => (
+          <div key={p.programme_id}>
             <div className="row between"><strong>{p.institution_name} · {p.programme_code}</strong>
               <Link className="small" to={`/issues?rule_id=C001_EXCESS_INTAKE,C002_SUPERNUMERARY_CAP`}>See flags</Link></div>
             <SeatStrip pos={p} />
           </div>
-        ))}
+        ))}</div>}
       </section>
       <div className="grid g2">
         <section className="card"><h2>By state (within intake vs approved)</h2>
@@ -77,14 +81,18 @@ export default function National() {
             <table><tbody>{Object.entries(x.open_flags_by_rule).map(([r, n]) => (
               <tr key={r}><td><Link to={`/issues?rule_id=${r}`}><code>{r}</code></Link></td><td className="num">{n as number}</td></tr>))}</tbody></table>)}</section>
       </div>
+      </>}
+      {tab === "submission" && (
       <section className="card"><h2>Submission status</h2>
         <table><thead><tr><th>Institution</th><th>Code</th><th className="num">Programmes declared</th><th>Status</th></tr></thead><tbody>
           {x.submission_status.map((s: any) => (
             <tr key={s.institution_id}><td>{s.institution_name}</td><td className="mono">{s.aicte_code}</td><td className="num">{s.submitted}/{s.programmes}</td>
               <td>{s.complete ? <Badge v="COMMITTED">Complete</Badge> : <Badge v="PREVIEW">Open</Badge>}</td></tr>))}
         </tbody></table></section>
+      )}
+      {tab === "programmes" && (
       <section className="card flat"><div style={{ padding: 16, paddingBottom: 0 }}><h2>Programmes</h2></div>
-        <div className="tablewrap"><table>
+        <div className="tablewrap scrollbox"><table>
           <thead><tr><th>Institution</th><th>Programme</th><th className="num">Intake</th><th className="num">Regular</th><th className="num">NRI</th>
             <th className="num">Over intake</th><th className="num">Utilisation</th><th>FN/OCI</th><th>CIWG</th><th>TFW</th><th>Declared</th></tr></thead>
           <tbody>{x.programmes.map((p: any) => (
@@ -95,6 +103,7 @@ export default function National() {
               {["SN_FN_OCI", "SN_CIWG", "SN_TFW"].map((c) => <td key={c} className="small" style={p.supernumerary[c].excess ? { color: "var(--red)", fontWeight: 700 } : {}}>{p.supernumerary[c].enrolled}/{p.supernumerary[c].cap}</td>)}
               <td className="small">{p.submitted_at ? fmtDate(p.submitted_at) : "—"}</td></tr>))}
           </tbody></table></div></section>
+      )}
     </div>
   );
 }

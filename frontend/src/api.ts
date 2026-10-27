@@ -134,30 +134,41 @@ export function useApi<T = any>(path: string | null, deps: unknown[] = []) {
   return { data, error, loading, reload: load, setData };
 }
 
-/** Subscribe to server-sent events; calls onEvent(type, data). Reconnects with backoff. */
-export function useLiveEvents(onEvent: (type: string, data: any) => void, enabled = true) {
+let configPromise: Promise<{ live_events: boolean }> | null = null;
+export function appConfig() {
+  if (!configPromise) configPromise = api<{ live_events: boolean }>("/api/v1/config").catch(() => ({ live_events: false }));
+  return configPromise;
+}
+
+export type LiveState = "live" | "connecting" | "polling";
+export const liveLabel = (s: LiveState) =>
+  s === "live" ? "● Live" : s === "polling" ? "↻ Auto-refresh every 30 s" : "○ Connecting";
+
+/** Live updates over server-sent events; on deployments without them (serverless), poll every 30 s instead. */
+export function useLiveEvents(onEvent: (type: string, data: any) => void, enabled = true): LiveState {
   const cb = useRef(onEvent);
   cb.current = onEvent;
-  const [connected, setConnected] = useState(false);
+  const [state, setState] = useState<LiveState>("connecting");
   useEffect(() => {
-    if (!enabled || typeof EventSource === "undefined") return;
+    if (!enabled) return;
     let es: EventSource | null = null;
     let stopped = false;
     let retry = 1000;
+    let timer: ReturnType<typeof setInterval> | null = null;
     const connect = async () => {
       try {
         const { token: t } = await api<{ token: string }>("/api/v1/auth/stream-token", { method: "POST" });
         if (stopped) return;
         es = new EventSource(`/api/v1/events?token=${encodeURIComponent(t)}`);
         es.addEventListener("ready", () => {
-          setConnected(true);
+          setState("live");
           retry = 1000;
         });
         for (const kind of ["seat.changed", "issue.opened", "issue.updated"]) {
           es.addEventListener(kind, (ev) => cb.current(kind, JSON.parse((ev as MessageEvent).data)));
         }
         es.onerror = () => {
-          setConnected(false);
+          setState("connecting");
           es?.close();
           if (!stopped) setTimeout(connect, (retry = Math.min(retry * 2, 30000)));
         };
@@ -165,13 +176,21 @@ export function useLiveEvents(onEvent: (type: string, data: any) => void, enable
         if (!stopped) setTimeout(connect, (retry = Math.min(retry * 2, 30000)));
       }
     };
-    connect();
+    appConfig().then((cfg) => {
+      if (stopped) return;
+      if (cfg.live_events && typeof EventSource !== "undefined") connect();
+      else {
+        setState("polling");
+        timer = setInterval(() => cb.current("poll", {}), 30000);
+      }
+    });
     return () => {
       stopped = true;
       es?.close();
+      if (timer) clearInterval(timer);
     };
   }, [enabled]);
-  return connected;
+  return state;
 }
 
 export const fmtDate = (s?: string | null) =>

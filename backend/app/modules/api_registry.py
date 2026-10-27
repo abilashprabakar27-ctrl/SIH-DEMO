@@ -46,6 +46,13 @@ def _inst_view(i: Institution) -> dict:
             "region": i.region, "institution_type": i.institution_type}
 
 
+@router.get("/config")
+def client_config():
+    """Public runtime flags for the frontend."""
+    return {"live_events": settings.live_events, "academic_year": settings.current_year,
+            "apaar_registry": "SIMULATED"}
+
+
 @router.get("/institutions")
 def list_institutions(actor: Actor = Depends(current_actor), db: Session = Depends(get_db)):
     q = select(Institution).order_by(Institution.aicte_code)
@@ -206,6 +213,8 @@ def seat_check(body: SeatCheckIn, actor: Actor = Depends(user_or_client), db: Se
 @router.get("/events")
 async def event_stream(request: Request, token: str):
     """Server-Sent Events. Authenticate with a token from POST /auth/stream-token."""
+    if not settings.live_events:
+        raise ApiError(503, "Live updates are off on this deployment; pages refresh automatically.")
     user_id = decode_token(token, purpose="sse")
     db = SessionLocal()
     try:

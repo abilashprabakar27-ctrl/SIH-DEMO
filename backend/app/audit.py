@@ -17,7 +17,7 @@ import re
 import threading
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from .db import SessionLocal, after_commit, utcnow
@@ -68,6 +68,9 @@ def _append(events: list[dict]) -> None:
     with _chain_lock:
         s = SessionLocal()
         try:
+            if s.get_bind().dialect.name == "postgresql":
+                # Serialise appends across processes/instances for the whole transaction.
+                s.execute(text("SELECT pg_advisory_xact_lock(726263)"))
             last = s.execute(select(AuditEvent.hash).order_by(AuditEvent.seq.desc()).limit(1)).scalar()
             prev = last or GENESIS
             for ev in events:

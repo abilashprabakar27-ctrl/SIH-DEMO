@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import os
 import secrets
 import threading
 import time
@@ -256,4 +257,7 @@ limiter = RateLimiter()
 
 
 def client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded and os.environ.get("VERCEL"):
+        return forwarded.split(",")[0].strip()  # set by the Vercel edge, not by the client
     return request.client.host if request.client else "unknown"

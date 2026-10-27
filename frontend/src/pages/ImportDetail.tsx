@@ -134,7 +134,7 @@ export default function ImportDetail() {
           {TABS.map((t) => <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "on" : ""} onClick={() => { setTab(t); setPage(1); }}>
             {t === "ALL" ? "All rows" : t.toLowerCase()} {t !== "ALL" && `(${c[t] ?? 0})`}</button>)}
         </div>
-        <div className="tablewrap">
+        <div className="tablewrap scrollbox">
           <table>
             <thead><tr><th>Row</th><th>Status</th><th>Roll</th><th>Name</th><th>Programme</th><th>Seat</th><th>Findings and how to fix</th><th></th></tr></thead>
             <tbody>

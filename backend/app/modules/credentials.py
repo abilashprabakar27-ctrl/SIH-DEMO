@@ -78,6 +78,9 @@ _key: IssuerKey | None = None
 def issuer_key() -> IssuerKey:
     """Load the Ed25519 issuer key from var/, generating it (mode 0600) on first start."""
     global _key
+    if _key is None and os.environ.get("ISSUER_PRIVATE_KEY_PEM"):
+        pem = os.environ["ISSUER_PRIVATE_KEY_PEM"].replace("\\n", "\n").encode()
+        _key = IssuerKey(serialization.load_pem_private_key(pem, password=None))
     if _key is None:
         path = settings.var_dir / "issuer_ed25519.pem"
         if not path.exists():

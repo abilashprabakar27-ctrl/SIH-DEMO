@@ -38,7 +38,7 @@ export function IssueList() {
       <ErrorBox error={r.error} onRetry={() => r.reload()} />
       {r.loading && !r.data && <Loading />}
       {r.data && (
-        <section className="card flat"><div className="tablewrap"><table>
+        <section className="card flat"><div className="tablewrap scrollbox"><table>
           <thead><tr><th>Rule</th><th>What was found</th><th>Institution</th><th>Year</th><th>Status</th><th>Opened</th></tr></thead>
           <tbody>
             {r.data.items.length === 0 && <tr><td colSpan={6} className="muted">No flags here.</td></tr>}
@@ -60,7 +60,7 @@ function Evidence({ ev }: { ev: any }) {
     <div className="stack">
       {ev.position && <div><h3>Seat position ({ev.programme_code} {ev.academic_year})</h3><SeatStrip pos={ev.position} /></div>}
       {ev.sides && (
-        <div className="tablewrap"><table><thead><tr><th>Side</th><th>Institution</th><th>Roll / record</th><th>Programme</th><th>Year</th><th>Status</th></tr></thead>
+        <div className="tablewrap scrollbox"><table><thead><tr><th>Side</th><th>Institution</th><th>Roll / record</th><th>Programme</th><th>Year</th><th>Status</th></tr></thead>
           <tbody>{ev.sides.map((s: any, i: number) => (
             <tr key={i}><td>{s.own ? <Badge v="VALID">Your institution</Badge> : <Badge v="PREVIEW">Other</Badge>}</td>
               <td>{s.institution_name || s.institution || "—"}</td>
@@ -84,7 +84,7 @@ export function IssueDetail() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<ApiError | null>(null);
   const [toast, show] = useToast();
-  useLiveEvents((_t, data) => { if (data.issue_id === id) d.reload(true); });
+  useLiveEvents((t, data) => { if (t === "poll" || data.issue_id === id) d.reload(true); });
   if (d.loading && !d.data) return <Loading />;
   if (d.error) return <ErrorBox error={d.error} onRetry={() => d.reload()} />;
   const i = d.data;

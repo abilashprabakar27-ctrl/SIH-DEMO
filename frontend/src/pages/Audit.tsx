@@ -36,7 +36,7 @@ export default function Audit() {
       </section>
       {r.loading && !r.data && <Loading />}
       {r.data && (
-        <section className="card flat"><div className="tablewrap"><table>
+        <section className="card flat"><div className="tablewrap scrollbox"><table>
           <thead><tr><th className="num">#</th><th>When</th><th>Actor</th><th>Action</th><th>Entity</th><th>Outcome</th><th>Detail</th><th>Hash</th></tr></thead>
           <tbody>{r.data.items.map((e: any) => (
             <tr key={e.seq}><td className="num">{e.seq}</td><td className="small">{fmtDateTime(e.at)}</td><td className="small">{e.actor_role || "—"}</td>

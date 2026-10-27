@@ -480,7 +480,17 @@ def write_sample_files(db, rng) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description="Seed the prototype with synthetic data.")
     ap.add_argument("--reset", action="store_true", help="drop and recreate all tables first")
+    ap.add_argument("--if-empty", action="store_true", help="seed only when the database has no institutions yet")
     args = ap.parse_args()
+    if args.if_empty:
+        from sqlalchemy import inspect
+
+        if inspect(engine).has_table("institutions"):
+            with SessionLocal() as s:
+                if s.execute(select(Institution.id).limit(1)).first():
+                    print("Database already seeded; skipping (use --reset to start over).")
+                    return
+        args.reset = True
     started = datetime.now(UTC)
     stats = run(reset=args.reset)
     for k, v in stats.items():

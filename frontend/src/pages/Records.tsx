@@ -59,7 +59,7 @@ export default function Records() {
       {r.loading && !r.data && <Loading what="Searching" />}
       {r.data && (
         <section className="card flat">
-          <div className="tablewrap"><table>
+          <div className="tablewrap scrollbox"><table>
             <thead><tr>
               <th><button className="link" onClick={() => sortBy("name")}>Name{arrow("name")}</button></th>
               <th><button className="link" onClick={() => sortBy("roll")}>Roll{arrow("roll")}</button></th>

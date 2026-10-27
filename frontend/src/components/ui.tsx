@@ -135,3 +135,13 @@ export function Figure({ k, v, tone }: { k: string; v: ReactNode; tone?: "bad" |
     </div>
   );
 }
+
+export function Tabs({ tabs, active, onChange }: { tabs: [string, string][]; active: string; onChange: (k: string) => void }) {
+  return (
+    <div className="tabs" role="tablist">
+      {tabs.map(([k, label]) => (
+        <button key={k} role="tab" aria-selected={active === k} className={active === k ? "on" : ""} onClick={() => onChange(k)}>{label}</button>
+      ))}
+    </div>
+  );
+}

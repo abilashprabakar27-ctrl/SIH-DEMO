@@ -57,8 +57,9 @@ export default function SeatStrip({ pos, compact = false }: { pos: Position; com
         Within intake {within}/{intake}
         {pos.excess_over_intake > 0 && <strong style={{ color: "var(--red)" }}> · +{pos.excess_over_intake} over intake</strong>}
       </div>
-      {!compact &&
-        cats.map(([cat, v]) => {
+      {!compact && (
+        <div className="sn-row">
+          {cats.map(([cat, v]) => {
           const cells: Cell[] = [];
           for (let i = 0; i < Math.max(v.cap, v.enrolled); i++) {
             if (i < Math.min(v.enrolled, v.cap)) cells.push({ fill: "#a8650f", stroke: "#a8650f" });
@@ -66,7 +67,7 @@ export default function SeatStrip({ pos, compact = false }: { pos: Position; com
             else cells.push({ fill: "#b42318", stroke: "#b42318" });
           }
           return (
-            <div key={cat} style={{ marginTop: 4 }}>
+            <div key={cat}>
               <Cells cells={cells} label={`Supernumerary ${LABELS[cat]} ${v.enrolled} of ${v.cap}`} />
               <div className="cap">
                 Supernumerary {LABELS[cat] || cat} {v.enrolled}/{v.cap}
@@ -74,7 +75,9 @@ export default function SeatStrip({ pos, compact = false }: { pos: Position; com
               </div>
             </div>
           );
-        })}
+          })}
+        </div>
+      )}
     </div>
   );
 }

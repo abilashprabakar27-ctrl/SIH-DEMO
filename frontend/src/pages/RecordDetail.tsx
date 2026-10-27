@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api, ApiError, fmtDate, fmtDateTime, openDocument, useApi } from "../api";
 import { useAuth } from "../App";
 import SeatStrip from "../components/SeatStrip";
-import { Apaar, Badge, Confirm, ErrorBox, Field, Findings, Loading, useToast } from "../components/ui";
+import { Apaar, Badge, Confirm, ErrorBox, Field, Findings, Loading, Tabs, useToast } from "../components/ui";
 
 const EDITABLE: [string, string][] = [
   ["full_name", "Full name"], ["date_of_birth", "Date of birth"], ["gender", "Gender"], ["nationality_status", "Nationality status"],
@@ -39,6 +39,7 @@ export default function RecordDetail() {
   const [revoke, setRevoke] = useState<any>(null);
   const [revokeReason, setRevokeReason] = useState("");
   const [toast, show] = useToast();
+  const [tab, setTab] = useState("details");
   const inst = user?.role === "INST_ADMIN" || user?.role === "INST_STAFF";
 
   useEffect(() => {
@@ -92,12 +93,15 @@ export default function RecordDetail() {
         </div>
         {inst && (
           <div className="row">
-            <button className="secondary" onClick={() => { setMode("correct"); setDraft(current(e)); }}>Correct this record</button>
-            {allowed_transitions.length > 0 && <button className="secondary" onClick={() => { setMode("status"); setStatus(allowed_transitions[0]); }}>Change status</button>}
+            <button className="secondary" onClick={() => { setMode("correct"); setDraft(current(e)); setTab("details"); }}>Correct this record</button>
+            {allowed_transitions.length > 0 && <button className="secondary" onClick={() => { setMode("status"); setStatus(allowed_transitions[0]); setTab("details"); }}>Change status</button>}
           </div>
         )}
       </div>
       {toast}
+      <Tabs active={tab} onChange={setTab} tabs={[["details", "Details"], ["signed", `Signed records (${credentials.length})`],
+        ["flags", `Flags (${flags.length})`], ["history", `History (${history.length})`]]} />
+      {tab === "details" && <>
       <div className="grid g2">
         <section className="card">
           <h2>Student</h2>
@@ -157,6 +161,8 @@ export default function RecordDetail() {
           </div>
         </section>
       )}
+      </>}
+      {tab === "signed" && (
       <section className="card">
         <div className="row between"><h2>Signed records</h2>
           {user?.role === "INST_ADMIN" && ["ACTIVE", "GRADUATED"].includes(e.status) && (
@@ -177,13 +183,16 @@ export default function RecordDetail() {
           </tbody></table>
         )}
       </section>
-      <div className="grid g2">
+      )}
+      {tab === "flags" && (
         <section className="card">
           <h2>Flags on this record</h2>
           {flags.length === 0 ? <p className="muted">None.</p> : flags.map((f: any) => (
             <p key={f.id}><Badge v={f.status} /> <Link to={`/issues/${f.id}`}><code>{f.rule_id}</code></Link> {f.message}</p>
           ))}
         </section>
+      )}
+      {tab === "history" && (
         <section className="card">
           <h2>History</h2>
           <ul className="timeline">
@@ -194,7 +203,7 @@ export default function RecordDetail() {
             ))}
           </ul>
         </section>
-      </div>
+      )}
       {revoke && (
         <Confirm title="Revoke this signed record?" confirmLabel="Revoke record" danger busy={busy} onCancel={() => setRevoke(null)}
           onConfirm={() => act(() => api(`/api/v1/credentials/${revoke.id}/revoke`, { body: { reason: revokeReason } }), "Record revoked. Verifiers will see the reason.").then(() => setRevoke(null))}>

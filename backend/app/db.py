@@ -14,7 +14,11 @@ from sqlalchemy import DateTime, create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from sqlalchemy.types import TypeDecorator
 
-from .config import settings
+from .config import ON_VERCEL, settings
+
+
+def settings_on_vercel() -> bool:
+    return ON_VERCEL
 
 
 class Base(DeclarativeBase):
@@ -48,6 +52,13 @@ def _make_engine(url: str):
     kwargs: dict = {"future": True}
     if url.startswith("sqlite"):
         kwargs["connect_args"] = {"check_same_thread": False, "timeout": 30}
+    else:
+        kwargs["pool_pre_ping"] = True
+        kwargs["connect_args"] = {"prepare_threshold": None}  # safe behind PgBouncer (Neon pooled endpoint)
+        if settings_on_vercel():
+            from sqlalchemy.pool import NullPool  # serverless: let Neon's pooler hold connections
+
+            kwargs["poolclass"] = NullPool
     eng = create_engine(url, **kwargs)
     if url.startswith("sqlite"):
 

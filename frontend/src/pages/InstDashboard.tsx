@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { api, ApiError, CURRENT_YEAR, fmtDate, fmtDateTime, useApi, useLiveEvents, YEARS } from "../api";
+import { api, ApiError, CURRENT_YEAR, fmtDate, fmtDateTime, useApi, useLiveEvents, liveLabel, YEARS } from "../api";
 import { useAuth } from "../App";
 import SeatStrip, { SeatLegend } from "../components/SeatStrip";
 import { Badge, Confirm, Empty, ErrorBox, Figure, Loading, useToast } from "../components/ui";
@@ -44,7 +44,7 @@ export default function InstDashboard() {
           <p className="muted">AICTE code {x.institution.aicte_code} · {x.institution.state} · submission deadline {fmtDate(x.submission.deadline)}</p>
         </div>
         <div className="row">
-          <span className="live">{live ? "● Live" : "○ Connecting"}{updated && ` · updated ${updated}`}</span>
+          <span className="live">{liveLabel(live)}{updated && ` · updated ${updated}`}</span>
           <select aria-label="Academic year" value={year} onChange={(e) => setYear(e.target.value)} style={{ width: "auto" }}>
             {YEARS.map((y) => <option key={y}>{y}</option>)}
           </select>
@@ -63,8 +63,9 @@ export default function InstDashboard() {
       <section className="card">
         <div className="row between"><h2>Seat position by programme · {year}</h2><SeatLegend /></div>
         {x.programmes.length === 0 && <Empty>No approved intake for {year}.</Empty>}
+        <div className="prog-grid">
         {x.programmes.map((p: any) => (
-          <div key={p.programme_id} style={{ borderTop: "1px solid var(--line-2)", paddingTop: 10, marginTop: 10 }}>
+          <div key={p.programme_id}>
             <div className="row between">
               <strong>{p.programme_code} <span className="muted" style={{ fontWeight: 400 }}>{p.programme_name}</span></strong>
               <span className="row">
@@ -78,17 +79,18 @@ export default function InstDashboard() {
             <SeatStrip pos={p} />
           </div>
         ))}
+        </div>
       </section>
       <div className="grid g2">
         <section className="card">
           <h2>Recent uploads</h2>
           {x.recent_uploads.length === 0 ? <Empty>No uploads yet. <Link to="/inst/upload">Upload your first file</Link>.</Empty> : (
-            <table><thead><tr><th>File</th><th>Status</th><th className="num">Rows</th><th>When</th></tr></thead><tbody>
+            <div className="scrollbox short"><table><thead><tr><th>File</th><th>Status</th><th className="num">Rows</th><th>When</th></tr></thead><tbody>
               {x.recent_uploads.map((j: any) => (
                 <tr key={j.id}><td><Link to={`/inst/imports/${j.id}`}>{j.filename}</Link></td><td><Badge v={j.status} /></td>
                   <td className="num">{j.committed_rows}/{j.total_rows}</td><td className="small">{fmtDateTime(j.created_at)}</td></tr>
               ))}
-            </tbody></table>
+            </tbody></table></div>
           )}
         </section>
         <section className="card">

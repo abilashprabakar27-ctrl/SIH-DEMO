@@ -8,7 +8,7 @@ from pathlib import Path
 
 _TMP = Path(tempfile.mkdtemp(prefix="apaar-tests-"))
 os.environ["APAAR_VAR_DIR"] = str(_TMP)
-os.environ["DATABASE_URL"] = f"sqlite:///{_TMP / 'test.db'}"
+os.environ["DATABASE_URL"] = os.environ.get("TEST_DATABASE_URL", f"sqlite:///{_TMP / 'test.db'}")
 os.environ["APAAR_TODAY"] = "2026-10-27"
 os.environ["LOGIN_RATE_PER_MINUTE"] = "100000"
 os.environ["VERIFY_RATE_PER_MINUTE"] = "100000"

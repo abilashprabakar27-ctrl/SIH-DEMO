@@ -57,12 +57,14 @@ export default function Login() {
         <p className="muted small">All accounts are synthetic and use the password <code>Demo@2026</code>. Choose one to sign in.</p>
         {accounts.loading && <p className="muted">Loading accounts…</p>}
         <ErrorBox error={accounts.error} onRetry={() => accounts.reload()} />
+        <div className="acct-grid">
         {accounts.data?.map((a) => (
           <button key={a.email} className="acct" onClick={() => submit(undefined, { email: a.email })} disabled={busy}>
             <span><strong>{ROLE_LABEL[a.role] || a.role}</strong><br /><span className="small muted">{a.email}</span></span>
-            <span className="small muted">Sign in →</span>
+            <span className="small muted">→</span>
           </button>
         ))}
+        </div>
       </section>
     </div>
   );
