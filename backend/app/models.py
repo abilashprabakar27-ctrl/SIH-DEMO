@@ -22,14 +22,9 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base, UTCDateTime, utcnow
-
-
-class SimRegistryBase(DeclarativeBase):
-    """Metadata installed only when the synthetic registry adapter is active."""
-    pass
 
 
 def _uuid() -> str:
@@ -117,50 +112,6 @@ class ApprovedIntake(Base):
     )
 
 
-class AcademicYear(Base):
-    __tablename__ = "academic_years"
-    year: Mapped[str] = mapped_column(String(7), primary_key=True)
-    starts_on: Mapped[date] = mapped_column(Date, nullable=False)
-    ends_on: Mapped[date] = mapped_column(Date, nullable=False)
-    is_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-
-
-class CapacityRuleSet(Base):
-    __tablename__ = "rule_sets"
-    id: Mapped[str] = pk()
-    code: Mapped[str] = mapped_column(String(60), nullable=False, index=True)
-    version: Mapped[int] = mapped_column(Integer, nullable=False)
-    source_type: Mapped[str] = mapped_column(String(30), nullable=False)
-    source_ref: Mapped[str] = mapped_column(String(300), nullable=False)
-    source_url: Mapped[str | None] = mapped_column(String(500))
-    source_accessed_on: Mapped[date | None] = mapped_column(Date)
-    verification_status: Mapped[str] = mapped_column(String(20), nullable=False, default="UNVERIFIED")
-    academic_year_from: Mapped[str] = mapped_column(String(7), nullable=False)
-    academic_year_to: Mapped[str] = mapped_column(String(7), nullable=False)
-    effective_from: Mapped[date] = mapped_column(Date, nullable=False)
-    effective_to: Mapped[date | None] = mapped_column(Date)
-    status: Mapped[str] = mapped_column(String(12), nullable=False, default="DRAFT")
-    reason: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = created()
-    entries: Mapped[list[CapacityRuleEntry]] = relationship(cascade="all, delete-orphan")
-    __table_args__ = (UniqueConstraint("code", "version"),
-                      CheckConstraint("status IN ('DRAFT','ACTIVE','SUPERSEDED','RETIRED')", name="ck_rule_set_status"))
-
-
-class CapacityRuleEntry(Base):
-    __tablename__ = "rule_set_entries"
-    id: Mapped[str] = pk()
-    rule_set_id: Mapped[str] = mapped_column(ForeignKey("rule_sets.id", ondelete="CASCADE"), nullable=False, index=True)
-    seat_category: Mapped[str] = mapped_column(String(20), nullable=False)
-    level: Mapped[str] = mapped_column(String(20), nullable=False, default="*")
-    discipline: Mapped[str] = mapped_column(String(40), nullable=False, default="*")
-    percent_bp: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    numerator: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    denominator: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    rounding: Mapped[str] = mapped_column(String(10), nullable=False, default="FLOOR")
-    __table_args__ = (UniqueConstraint("rule_set_id", "seat_category", "level", "discipline"),)
-
-
 class SupernumeraryQuota(Base):
     __tablename__ = "supernumerary_quotas"
     id: Mapped[str] = pk()
@@ -169,15 +120,6 @@ class SupernumeraryQuota(Base):
     cap_seats: Mapped[int] = mapped_column(Integer, nullable=False)
     percent_basis: Mapped[float | None] = mapped_column(Float)
     rule_source: Mapped[str] = mapped_column(String(300), nullable=False)
-    rule_set_id: Mapped[str | None] = mapped_column(ForeignKey("rule_sets.id"))
-    rule_set_version: Mapped[int | None] = mapped_column(Integer)
-    entry_id: Mapped[str | None] = mapped_column(ForeignKey("rule_set_entries.id"))
-    calc: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    source: Mapped[str] = mapped_column(String(12), nullable=False, default="RULE_SET")
-    override_reason: Mapped[str | None] = mapped_column(Text)
-    override_by: Mapped[str | None] = mapped_column(String(36))
-    computed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
-    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     intake: Mapped[ApprovedIntake] = relationship(back_populates="quotas")
     __table_args__ = (UniqueConstraint("intake_id", "seat_category"),)
 
@@ -188,9 +130,6 @@ class Student(Base):
     apaar_id: Mapped[str | None] = mapped_column(String(12), unique=True)
     apaar_ref: Mapped[str | None] = mapped_column(String(16), index=True)
     apaar_status: Mapped[str] = mapped_column(String(20), nullable=False, default="UNVERIFIED")
-    apaar_verified_mode: Mapped[str | None] = mapped_column(String(16))
-    apaar_verified_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
-    apaar_adapter_version: Mapped[str | None] = mapped_column(String(40))
     apaar_pending_reason: Mapped[str | None] = mapped_column(String(30))
     full_name: Mapped[str] = mapped_column(String(200), nullable=False)
     name_key: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -229,7 +168,6 @@ class Enrolment(Base):
     source: Mapped[str] = mapped_column(String(10), nullable=False)
     import_job_id: Mapped[str | None] = mapped_column(ForeignKey("import_jobs.id"))
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    content_hash: Mapped[str | None] = mapped_column(String(64), index=True)
     created_at: Mapped[datetime] = created()
     updated_at: Mapped[datetime] = updated()
     student: Mapped[Student] = relationship(back_populates="enrolments")
@@ -262,11 +200,6 @@ class ImportJob(Base):
     total_rows: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     committed_rows: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     summary: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    rules_snapshot_id: Mapped[str | None] = mapped_column(ForeignKey("rules_snapshots.id"))
-    locked_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
-    lock_token: Mapped[str | None] = mapped_column(String(36))
-    lock_expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime, index=True)
-    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = created()
     updated_at: Mapped[datetime] = updated()
     __table_args__ = (
@@ -309,16 +242,6 @@ class ValidationRule(Base):
     locked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
-class RuleSnapshot(Base):
-    __tablename__ = "rules_snapshots"
-    id: Mapped[str] = pk()
-    version: Mapped[int] = mapped_column(Integer, nullable=False, unique=True)
-    reason: Mapped[str] = mapped_column(Text, nullable=False)
-    config: Mapped[dict] = mapped_column(JSON, nullable=False)
-    created_by: Mapped[str | None] = mapped_column(String(36))
-    created_at: Mapped[datetime] = created()
-
-
 class ValidationIssue(Base):
     __tablename__ = "validation_issues"
     id: Mapped[str] = pk()
@@ -332,13 +255,9 @@ class ValidationIssue(Base):
     academic_year: Mapped[str | None] = mapped_column(String(7))
     message: Mapped[str] = mapped_column(Text, nullable=False)
     evidence: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    explanation: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    evidence_hash: Mapped[str] = mapped_column(String(64), nullable=False, default="")
-    rules_snapshot_id: Mapped[str | None] = mapped_column(ForeignKey("rules_snapshots.id"))
     remediation: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(25), nullable=False, default="OPEN")
     resolution_note: Mapped[str | None] = mapped_column(Text)
-    resolution_outcome: Mapped[str | None] = mapped_column(String(30))
     resolved_by: Mapped[str | None] = mapped_column(String(36))
     created_at: Mapped[datetime] = created()
     updated_at: Mapped[datetime] = updated()
@@ -420,7 +339,6 @@ class VerificationRequest(Base):
     student_id: Mapped[str | None] = mapped_column(ForeignKey("students.id"))
     purpose: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False)
-    consent_hold_reason: Mapped[str | None] = mapped_column(String(40))
     consent_decided_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     expires_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
     created_at: Mapped[datetime] = created()
@@ -496,7 +414,6 @@ class IdempotencyRecord(Base):
     response: Mapped[dict] = mapped_column(JSON, nullable=False)
     status_code: Mapped[int] = mapped_column(Integer, nullable=False, default=200)
     created_at: Mapped[datetime] = created()
-    expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime, index=True)
 
 
 class Notification(Base):
@@ -512,7 +429,7 @@ class Notification(Base):
     created_at: Mapped[datetime] = created()
 
 
-class SimApaarRegistry(SimRegistryBase):
+class SimApaarRegistry(Base):
     """Synthetic stand-in for the national APAAR registry. Used only by the simulated adapter."""
 
     __tablename__ = "sim_apaar_registry"

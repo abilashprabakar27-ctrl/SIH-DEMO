@@ -156,49 +156,6 @@ def test_upload_rejections(client, as_):
     client.post(f"/api/v1/imports/{r.json()['id']}/discard", headers=h)
 
 
-def test_parser_accepts_semicolon_and_windows_1252():
-    from app.modules.intake import parse_upload
-
-    csv_data = ("apaar_id;institution_student_id;full_name;date_of_birth;gender;nationality_status;"
-                "programme_code;academic_year;seat_category;admission_date\n"
-                ";R1;Jos\xe9 Rao;2008-01-01;M;INDIAN;BTECH-CSE;2026-27;REGULAR;2026-08-01\n")
-    rows = parse_upload("students.csv", csv_data.encode("cp1252"))
-    assert rows[0]["full_name"] == "José Rao"
-
-
-def test_parser_rejects_macro_workbooks():
-    import pytest
-
-    from app.modules.intake import parse_upload
-    from app.security import ApiError
-
-    with pytest.raises(ApiError) as exc:
-        parse_upload("students.xlsm", b"PK\x03\x04")
-    assert exc.value.status == 415
-
-
-def test_expired_commit_lease_can_be_recovered(client, as_, db):
-    from datetime import timedelta
-
-    from app.db import utcnow
-    from app.models import ImportJob
-
-    h = as_(STAFF)
-    job_data = upload(client, h, DEMO_A).json()
-    job = db.get(ImportJob, job_data["id"])
-    job.status = "COMMITTING"
-    job.lock_token = "expired-test-lock"
-    job.locked_at = utcnow() - timedelta(minutes=20)
-    job.lock_expires_at = utcnow() - timedelta(minutes=10)
-    db.commit()
-
-    response = client.post(f"/api/v1/imports/{job.id}/recover", headers=h)
-    assert response.status_code == 200, response.text
-    assert response.json()["job"]["status"] == "PARTIALLY_COMMITTED"
-    db.refresh(job)
-    assert job.lock_token is None and job.lock_expires_at is None
-
-
 def test_template_downloads(client, as_):
     h = as_(STAFF)
     r = client.get("/api/v1/imports/template.csv", headers=h)

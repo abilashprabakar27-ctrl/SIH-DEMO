@@ -9,10 +9,8 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
-import zipfile
 from collections import Counter
 from datetime import timedelta
-from uuid import uuid4
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.worksheet.datavalidation import DataValidation
@@ -48,7 +46,7 @@ STALE_LOCK = timedelta(minutes=10)
 
 def parse_upload(filename: str, content: bytes) -> list[dict]:
     name = (filename or "").lower()
-    if name.endswith(".xlsm") or not (name.endswith(".csv") or name.endswith(".xlsx")):
+    if not (name.endswith(".csv") or name.endswith(".xlsx")):
         raise ApiError(415, "Upload a .csv or .xlsx file (use the template).")
     if len(content) > settings.max_upload_bytes:
         raise ApiError(413, "The file is larger than 2 MB. Split it into smaller files.")
@@ -56,19 +54,10 @@ def parse_upload(filename: str, content: bytes) -> list[dict]:
         if not content.startswith(b"PK"):
             raise ApiError(415, "This file is not a real Excel (.xlsx) workbook.")
         try:
-            with zipfile.ZipFile(io.BytesIO(content)) as archive:
-                infos = archive.infolist()
-                if len(infos) > 250 or sum(item.file_size for item in infos) > 25 * 1024 * 1024:
-                    raise ApiError(413, "The Excel workbook expands beyond the supported size limit.")
-                if any("externallinks/" in item.filename.lower() for item in infos):
-                    raise ApiError(422, "Excel workbooks with external links are not supported.")
-        except zipfile.BadZipFile as exc:
-            raise ApiError(415, "This file is not a valid .xlsx workbook.") from exc
-        try:
             wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
         except Exception as exc:  # noqa: BLE001
             raise ApiError(422, "The Excel file could not be read. Save it again from Excel and retry.") from exc
-        ws = next((sheet for sheet in wb.worksheets if sheet.title.casefold() == "students"), wb.worksheets[0])
+        ws = wb.worksheets[0]
         it = ws.iter_rows(values_only=True)
         header = next(it, None) or ()
         raw_rows = [list(r) for r in it]
@@ -78,17 +67,9 @@ def parse_upload(filename: str, content: bytes) -> list[dict]:
             raise ApiError(415, "The CSV file contains binary data. Save it as plain CSV (UTF-8).")
         try:
             text = content.decode("utf-8-sig")
-        except UnicodeDecodeError:
-            try:
-                text = content.decode("cp1252")
-            except UnicodeDecodeError as exc:
-                raise ApiError(422, "The CSV encoding is not supported. Save it as UTF-8 or Windows-1252.") from exc
-        sample = text[:8192]
-        try:
-            delimiter = csv.Sniffer().sniff(sample, delimiters=",;").delimiter
-        except csv.Error:
-            delimiter = ","
-        reader = csv.reader(io.StringIO(text), delimiter=delimiter)
+        except UnicodeDecodeError as exc:
+            raise ApiError(422, "The CSV is not UTF-8 encoded. In Excel use 'CSV UTF-8' when saving.") from exc
+        reader = csv.reader(io.StringIO(text))
         header = next(reader, None) or []
         raw_rows = list(reader)
     cols = [canonical_header(h) for h in header]
@@ -293,20 +274,16 @@ def commit_job(db: Session, job: ImportJob, actor: Actor) -> dict:
                 "message": f"Nothing to do: this upload is already {job.status.lower()}."}
     previous = job.status
     now = utcnow()
-    lease_token = str(uuid4())
     res = db.execute(
         update(ImportJob)
         .where(
             ImportJob.id == job.id,
             or_(
                 ImportJob.status.in_(("PREVIEW", "PARTIALLY_COMMITTED")),
-                and_(ImportJob.status == "COMMITTING",
-                     or_(ImportJob.lock_expires_at < now,
-                         and_(ImportJob.lock_expires_at.is_(None), ImportJob.updated_at < now - STALE_LOCK))),
+                and_(ImportJob.status == "COMMITTING", ImportJob.updated_at < now - STALE_LOCK),
             ),
         )
-        .values(status="COMMITTING", locked_at=now, lock_token=lease_token,
-                lock_expires_at=now + STALE_LOCK, version=ImportJob.version + 1, updated_at=now)
+        .values(status="COMMITTING", updated_at=now)
         .execution_options(synchronize_session=False)
     )
     if res.rowcount != 1:
@@ -316,9 +293,7 @@ def commit_job(db: Session, job: ImportJob, actor: Actor) -> dict:
     db.refresh(job)
     institution = db.get(Institution, job.institution_id)
     try:
-        status_before = {r.id: r.status for r in _active_rows(db, job)}
         pairs = revalidate(db, job)
-        changed_since_preview = sum(status_before.get(row.id) != row.status for row, _ in pairs)
         committed_now = 0
         failed = 0
         affected = set()
@@ -331,9 +306,6 @@ def commit_job(db: Session, job: ImportJob, actor: Actor) -> dict:
                 en = engine.commit_values(db, plan, institution=institution, academic_year=job.academic_year,
                                           actor=actor, source="IMPORT", import_job_id=job.id,
                                           reason=f"Committed from upload {job.filename} row {row.row_no + 2}")
-                row.status = "COMMITTED"
-                row.enrolment_id = en.id
-                db.flush()
                 sp.commit()
             except Exception as exc:  # noqa: BLE001
                 sp.rollback()
@@ -344,6 +316,8 @@ def commit_job(db: Session, job: ImportJob, actor: Actor) -> dict:
                                                         "This row could not be saved; it was left uncommitted. Retry the commit.",
                                                         {"error": type(exc).__name__})]
                 continue
+            row.status = "COMMITTED"
+            row.enrolment_id = en.id
             committed_now += 1
             affected.add((en.programme_id, en.academic_year))
         for pid, year in sorted(affected):
@@ -358,18 +332,13 @@ def commit_job(db: Session, job: ImportJob, actor: Actor) -> dict:
         else:
             job.status = previous if previous != "COMMITTING" else "PREVIEW"
         _summarise(db, job, rows, [])
-        job.locked_at = None
-        job.lock_token = None
-        job.lock_expires_at = None
         audit.record(db, actor, "import.commit", "import_job", job.id,
                      detail={"committed_now": committed_now, "failed": failed, "remaining": len(remaining),
                              "status": job.status}, institution_id=job.institution_id)
         db.commit()
     except Exception:
         db.rollback()
-        db.execute(update(ImportJob).where(ImportJob.id == job.id).values(
-            status=previous if previous != "COMMITTING" else "PREVIEW",
-            locked_at=None, lock_token=None, lock_expires_at=None))
+        db.execute(update(ImportJob).where(ImportJob.id == job.id).values(status=previous if previous != "COMMITTING" else "PREVIEW"))
         db.commit()
         raise
     return {
@@ -378,34 +347,9 @@ def commit_job(db: Session, job: ImportJob, actor: Actor) -> dict:
         "committed_now": committed_now,
         "committed_total": job.committed_rows,
         "remaining": len(remaining),
-        "changed_since_preview": changed_since_preview,
         "message": f"Committed {committed_now} row(s)."
         + (f" {len(remaining)} row(s) still need attention." if remaining else ""),
     }
-
-
-def recover_expired_jobs(db: Session, actor: Actor, job_id: str | None = None) -> int:
-    """Release expired import leases without replaying rows; the next commit revalidates them."""
-    now = utcnow()
-    stmt = select(ImportJob).where(
-        ImportJob.status == "COMMITTING",
-        or_(ImportJob.lock_expires_at < now,
-            and_(ImportJob.lock_expires_at.is_(None), ImportJob.updated_at < now - STALE_LOCK)),
-    )
-    if job_id:
-        stmt = stmt.where(ImportJob.id == job_id)
-    jobs = list(db.execute(stmt).scalars())
-    for job in jobs:
-        job.status = "PARTIALLY_COMMITTED"
-        job.locked_at = None
-        job.lock_token = None
-        job.lock_expires_at = None
-        job.version += 1
-        audit.record(db, actor, "import.lease_recovered", "import_job", job.id,
-                     detail={"committed_rows": job.committed_rows}, institution_id=job.institution_id)
-    if jobs:
-        db.commit()
-    return len(jobs)
 
 
 def discard_job(db: Session, job: ImportJob, actor: Actor) -> None:

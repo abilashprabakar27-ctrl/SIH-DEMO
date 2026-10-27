@@ -149,7 +149,7 @@ def demo_b(api: Api) -> None:
     api.post(g, f"/api/v1/issues/{d003['id']}/actions", json={"action": "RESPOND",
                                                               "note": "Student joined on 1 September after transfer."})
     res = api.post(a, f"/api/v1/issues/{d003['id']}/actions", json={"action": "RESOLVE",
-                                                                    "note": "Transfer confirmed by both institutions.", "outcome": "EXPLAINED_NO_ACTION"}).json()
+                                                                    "note": "Transfer confirmed by both institutions."}).json()
     expect(res["status"] == "RESOLVED", "AICTE resolves D003 with a note")
     recs = api.get(g, "/api/v1/enrolments?programme_code=BTECH-CSE&academic_year=2026-27&sort=-updated&page_size=100").json()["items"]
     new = [e for e in recs if e["institution_student_id"] in ("GEC26CSE901", "GEC26CSE902", "GEC26CSE903")]

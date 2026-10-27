@@ -15,11 +15,9 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from . import audit
 from .config import settings
 from .db import SessionLocal, init_db
-from .models import ApprovedIntake, Programme
 from .modules import (
     api_audit,
     api_auth,
-    api_capacity_rules,
     api_credentials,
     api_dashboard,
     api_imports,
@@ -29,13 +27,10 @@ from .modules import (
     api_registry,
     api_students,
     api_verification,
-    ledger,
 )
-from .modules.capacity_rules import seed_capacity_rules
 from .modules.credentials import issuer_key
-from .modules.intake import recover_expired_jobs
-from .modules.rules import ensure_rule_snapshot, seed_rules
-from .security import ANONYMOUS, Actor, ApiError
+from .modules.rules import seed_rules
+from .security import ANONYMOUS, ApiError
 
 log = logging.getLogger("apaar")
 
@@ -43,21 +38,9 @@ log = logging.getLogger("apaar")
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
-    if settings.app_env == "production":
-        raise RuntimeError(
-            "APP_ENV=production is blocked: no contract-backed LIVE APAAR adapter is implemented; "
-            "the prototype only provides SIMULATED registry checks."
-        )
     with SessionLocal() as db:
         seed_rules(db)
-        ensure_rule_snapshot(db, "Startup rule catalogue snapshot")
-        seed_capacity_rules(db)
-        for intake, programme in db.query(ApprovedIntake, Programme).join(
-            Programme, Programme.id == ApprovedIntake.programme_id
-        ).all():
-            ledger.apply_default_caps(db, intake, programme)
         db.commit()
-        recover_expired_jobs(db, Actor(id=None, role="SYSTEM", kind="ANONYMOUS"))
     issuer_key()
     yield
 
@@ -72,7 +55,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-for r in (api_auth, api_capacity_rules, api_registry, api_imports, api_records, api_issues, api_dashboard, api_credentials,
+for r in (api_auth, api_registry, api_imports, api_records, api_issues, api_dashboard, api_credentials,
           api_verification, api_integration, api_audit, api_students):
     app.include_router(r.router)
 app.include_router(api_credentials.wellknown)

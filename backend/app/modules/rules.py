@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..models import RuleSnapshot, ValidationRule
+from ..models import ValidationRule
 
 LOCKED = {"R001_REQUIRED", "R002_FORMAT", "D002_ROLL_CONFLICT", "F001_DUP_APAAR_IN_FILE", "F002_DUP_ROLL_IN_FILE"}
 
@@ -116,19 +116,6 @@ def seed_rules(db: Session) -> None:
             )
         )
     db.flush()
-
-
-def ensure_rule_snapshot(db: Session, reason: str = "Rule catalogue snapshot", actor_id: str | None = None) -> RuleSnapshot:
-    config = {r.rule_id: {"enabled": r.enabled, "severity": r.severity}
-              for r in db.execute(select(ValidationRule).order_by(ValidationRule.rule_id)).scalars()}
-    latest = db.execute(select(RuleSnapshot).order_by(RuleSnapshot.version.desc()).limit(1)).scalar_one_or_none()
-    if latest is not None and latest.config == config:
-        return latest
-    snapshot = RuleSnapshot(version=(latest.version + 1 if latest else 1), reason=reason,
-                            config=config, created_by=actor_id)
-    db.add(snapshot)
-    db.flush()
-    return snapshot
 
 
 def load_config(db: Session) -> dict[str, RuleConfig]:

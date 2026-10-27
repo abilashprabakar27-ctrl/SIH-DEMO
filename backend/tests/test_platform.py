@@ -1,10 +1,6 @@
 """Integration API, audit chain, dashboards vs SQL, review priority, rules admin, live events."""
 
 import asyncio
-import os
-import subprocess
-import sys
-from pathlib import Path
 
 from sqlalchemy import func, select, text
 
@@ -179,47 +175,3 @@ def test_api_key_lifecycle(client, as_):
 def test_notifications_listed(client, as_):
     items = client.get("/api/v1/notifications", headers=as_("narmada.admin@demo.local")).json()
     assert items and all({"message", "link", "created_at"} <= set(i) for i in items)
-def test_system_status_clearly_marks_registry_as_simulated(client, as_):
-    response = client.get("/api/v1/integration/system/status", headers=as_("aicte.admin@demo.local"))
-    assert response.status_code == 200
-    status = response.json()
-    assert status["registry"]["mode"] == "SIMULATED"
-    assert status["registry"]["production_verification"] is False
-    assert status["production_ready"] is False
-    feature_status = {f["feature"]: f["state"] for f in status["prototype_features"]}
-    assert feature_status["APAAR registry check"] == "SIMULATED"
-    assert feature_status["QR verification"] == "STATUS_ONLY"
-
-
-def test_rule_history_and_outcome_metrics_are_visible_to_admin(client, as_):
-    admin = as_("aicte.admin@demo.local")
-    assert client.patch("/api/v1/rules/R011_DATE_UNUSUAL", headers=admin,
-                        json={"enabled": False}).status_code == 200
-    history = client.get("/api/v1/rules/history", headers=admin)
-    assert history.status_code == 200 and history.json()
-    assert history.json()[0]["version"] >= 2
-    metrics = client.get("/api/v1/rules/metrics", headers=admin)
-    assert metrics.status_code == 200 and "total_flags" in metrics.json()
-    assert client.get("/api/v1/rules/metrics", headers=as_("kaveri.admin@demo.local")).status_code == 403
-
-
-def test_disabled_adapter_schema_has_no_synthetic_registry_table(tmp_path):
-    root = Path(__file__).resolve().parents[2]
-    db_path = tmp_path / "disabled.db"
-    env = dict(os.environ, APAAR_ADAPTER="disabled", APP_ENV="development",
-               DATABASE_URL=f"sqlite:///{db_path}", PYTHONPATH=str(root / "backend"))
-    code = ("from sqlalchemy import inspect; from app.db import init_db,engine; init_db(); "
-            "assert 'sim_apaar_registry' not in inspect(engine).get_table_names()")
-    result = subprocess.run([sys.executable, "-c", code], cwd=root, env=env, capture_output=True, text=True, check=False)
-    assert result.returncode == 0, result.stderr
-
-
-def test_production_profile_schema_has_no_synthetic_registry_table(tmp_path):
-    root = Path(__file__).resolve().parents[2]
-    db_path = tmp_path / "production-profile.db"
-    env = dict(os.environ, APAAR_ADAPTER="simulated", APP_ENV="production",
-               DATABASE_URL=f"sqlite:///{db_path}", PYTHONPATH=str(root / "backend"))
-    code = ("from sqlalchemy import inspect; from app.db import init_db,engine; init_db(); "
-            "assert 'sim_apaar_registry' not in inspect(engine).get_table_names()")
-    result = subprocess.run([sys.executable, "-c", code], cwd=root, env=env, capture_output=True, text=True, check=False)
-    assert result.returncode == 0, result.stderr

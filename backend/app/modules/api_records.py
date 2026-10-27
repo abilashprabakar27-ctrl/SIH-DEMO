@@ -312,7 +312,7 @@ def decide(cand_id: str, body: DecisionIn, actor: Actor = Depends(require_roles(
                        ).scalars().first()
     if issue is not None and issue.status in issues.OPEN_STATES:
         if body.decision == "DIFFERENT_PEOPLE":
-            issues.apply_action(db, issue, actor, "DISMISS", f"Reviewer decision: different people. {body.note}", "FALSE_POSITIVE")
+            issues.apply_action(db, issue, actor, "DISMISS", f"Reviewer decision: different people. {body.note}")
         else:
             db.add(IssueEvent(issue_id=issue.id, actor_id=actor.id, actor_role=actor.role, action="DECISION_SAME_PERSON",
                               note=f"Reviewer decision: same person. Records are not merged automatically. {body.note}"))
