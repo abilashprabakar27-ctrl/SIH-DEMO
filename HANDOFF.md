@@ -29,15 +29,17 @@ Tell the new session: "Continue the build in HANDOFF.md, following docs/BUILD_PR
 | 6 | Credentials (SD-JWT style), verification, consent, certificate, QR | done + tested |
 | 7 | Dashboards, review priority, reports, seat-check, SSE, correction requests | done + tested |
 | 8 | Full seed + sample files + `scripts/run_demos.py` | done; demos A/B/C all PASS against live server |
-| 9 | React frontend + Playwright tour | NOT STARTED |
-| 10 | Docs (README, DEMO_SCRIPT, TEST_REPORT, traceability, API design, gap analysis, .env.example) | NOT STARTED |
-| 11 | Clean-clone validation | NOT STARTED |
+| 9 | React frontend + Playwright tour | done; tour PASSED (50 page views, 1360 + 390 px) |
+| 10 | Docs (README, DEMO_SCRIPT, TEST_REPORT, traceability, API design, gap analysis, .env.example) | done |
+| 11 | Clean-clone validation | done: setup, seed, run, demos, 107 tests, lint, tsc, tour all pass from a fresh clone |
 
 Verified: `python -m pytest -q` from the repo root gives 107 passed (about 55 s). With the seed loaded and uvicorn running, `python scripts/run_demos.py` prints ALL DEMOS PASSED.
 
-Immediate next actions:
-1. Build the frontend (`frontend/`, Vite + React + TS, hash routes), served by FastAPI from `frontend/dist`.
-2. Write the docs, Makefile, `.env.example` and Playwright tour (`scripts/ui_tour.py`).
+All 11 steps are complete. Optional next steps:
+1. Polish: an ImportDetail screenshot in the tour (it needs an upload first), and a toggle in the UI to turn the APAAR adapter "unavailable" (R008 demo).
+2. Production items: see docs/PRODUCTION_GAP_ANALYSIS.md.
+
+Frontend: `frontend/src` (App.tsx routes and role nav; api.ts fetch, downloads and SSE hook; components/SeatStrip.tsx; pages/*). Build with `make build`; FastAPI serves `frontend/dist`.
 
 ## Code map (backend/app)
 - `config.py`: settings; secrets are generated into `var/`; `APAAR_TODAY` overrides today's date for tests.
@@ -76,5 +78,6 @@ Immediate next actions:
 - Institution users cannot change shared identity fields of a student enrolled elsewhere (409). AICTE must correct the master record.
 - Review-priority "seats over intake" uses institution totals (excess ÷ total intake). Overdue correction requests add min(10, 3×n).
 
-## Known issues / not yet verified
-- The backend is verified by tests and the demos. The frontend has not been started.
+## Known issues / limitations
+- Review-priority peer stats use all 5 institutions (fewer than 8 per type), so zero-valued metrics can exceed |z| = 3.5 (e.g. Brahmaputra has no NRI students). This follows the spec and is documented in the gap analysis.
+- `pkill -f uvicorn` inside a compound shell command can kill the shell itself. Use `fuser -k 8000/tcp` to stop the server.
