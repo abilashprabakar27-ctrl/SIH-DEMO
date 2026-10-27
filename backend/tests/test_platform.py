@@ -150,3 +150,28 @@ def test_sse_requires_stream_token(client, as_):
     assert client.get(f"/api/v1/events?token={api_token}").status_code == 401
     tok = client.post("/api/v1/auth/stream-token", headers=as_("aicte.admin@demo.local")).json()["token"]
     assert tok
+
+
+def test_api_key_lifecycle(client, as_):
+    h = as_("godavari.admin@demo.local")
+    r = client.post("/api/v1/integration/clients", headers=h, json={"name": "Godavari ERP", "scopes": ["seat:check"]})
+    assert r.status_code == 200 and r.json()["api_key"].startswith(r.json()["key_prefix"] + ".")
+    key, cid = r.json()["api_key"], r.json()["id"]
+    listed = client.get("/api/v1/integration/clients", headers=h).json()
+    assert all("api_key" not in c for c in listed) and any(c["id"] == cid for c in listed)
+    assert client.post("/api/v1/seat-check", headers={"X-API-Key": key},
+                       json={"programme_code": "BTECH-ME", "seat_category": "REGULAR"}).status_code == 200
+    assert client.post("/api/v1/integration/enrolments", json={"records": [REC]},
+                       headers={"X-API-Key": key, "Idempotency-Key": "g1"}).status_code == 403  # scope missing
+    assert client.post(f"/api/v1/integration/clients/{cid}/revoke",
+                       headers=as_("kaveri.admin@demo.local")).status_code == 404
+    assert client.post(f"/api/v1/integration/clients/{cid}/revoke", headers=h).status_code == 200
+    assert client.post("/api/v1/seat-check", headers={"X-API-Key": key},
+                       json={"programme_code": "BTECH-ME", "seat_category": "REGULAR"}).status_code == 401
+    assert client.post("/api/v1/integration/clients", headers=as_("godavari.staff@demo.local"),
+                       json={"name": "x" * 5, "scopes": ["seat:check"]}).status_code == 403
+
+
+def test_notifications_listed(client, as_):
+    items = client.get("/api/v1/notifications", headers=as_("narmada.admin@demo.local")).json()
+    assert items and all({"message", "link", "created_at"} <= set(i) for i in items)

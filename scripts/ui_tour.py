@@ -19,9 +19,14 @@ ROOT = Path(__file__).resolve().parents[1]
 SHOTS = ROOT / "docs" / "screenshots"
 CHROMIUM = os.environ.get("CHROMIUM_PATH", "/opt/pw-browsers/chromium-1243/chrome-linux64/chrome")
 
+# A path, or (list page, link selector) to open the first detail page linked from that list.
 TOUR = {
-    "kaveri.admin@demo.local": ["/inst", "/inst/upload", "/records", "/issues", "/corrections", "/seat-check", "/reports"],
-    "aicte.admin@demo.local": ["/aicte", "/aicte/priority", "/issues", "/aicte/identity", "/records", "/aicte/rules",
+    "kaveri.admin@demo.local": ["/inst", "/inst/upload", ("/inst/upload", 'a[href^="#/inst/imports/"]'), "/inst/add",
+                                "/records", ("/records", 'a[href^="#/records/"]'), "/issues",
+                                ("/issues", 'a[href^="#/issues/"]'), "/corrections", "/seat-check", "/reports",
+                                "/inst/system-access"],
+    "aicte.admin@demo.local": ["/aicte", "/aicte/priority", "/issues", ("/issues", 'a[href^="#/issues/"]'),
+                               "/aicte/intakes", "/aicte/identity", "/records", "/aicte/rules",
                                "/aicte/integrations", "/audit", "/reports"],
     "aicte.analyst@demo.local": ["/aicte", "/records"],
     "auditor@demo.local": ["/audit", "/issues"],
@@ -58,11 +63,22 @@ def main() -> int:
                 page.wait_for_load_state("networkidle")
                 page.get_by_text(email, exact=True).click()
                 page.wait_for_selector("text=Sign out", timeout=15000)
-                for path in paths:
+                for entry in paths:
                     errors.clear()
+                    path = entry if isinstance(entry, str) else entry[0]
                     page.goto(f"{args.base}/#{path}")
                     page.wait_for_load_state("networkidle")
                     page.wait_for_timeout(300)
+                    if not isinstance(entry, str):
+                        link = page.locator(entry[1]).first
+                        if link.count() == 0:
+                            problems.append(f"{w}px {email} {path}: no detail link {entry[1]}")
+                            continue
+                        link.click()
+                        page.wait_for_load_state("networkidle")
+                        page.wait_for_timeout(300)
+                        path = page.url.split("#", 1)[1].split("?")[0]
+                        path = "/".join(path.split("/")[:-1]) + "/detail"
                     role = email.split("@")[0].replace(".", "-")
                     shot = SHOTS / f"{role}{path.replace('/', '_')}_{w}.png"
                     page.screenshot(path=str(shot), full_page=True)

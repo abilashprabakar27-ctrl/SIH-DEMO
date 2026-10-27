@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError, fmtDate } from "../api";
 import { Badge, ErrorBox, Field } from "../components/ui";
 
-export default function Verify({ publicView = false }: { publicView?: boolean }) {
+export default function Verify() {
   const [sp] = useSearchParams();
   const [token, setToken] = useState(sp.get("t") || "");
   const [res, setRes] = useState<any>(null);
@@ -41,8 +41,7 @@ export default function Verify({ publicView = false }: { publicView?: boolean })
   }, []);
 
   return (
-    <div className="stack" style={publicView ? { maxWidth: 820, margin: "24px auto" } : {}}>
-      {publicView && <p className="row between"><span className="pill sim">APAAR checks simulated · synthetic data</span><Link to="/login">Sign in</Link></p>}
+    <div className="stack">
       <div className="pagehead"><div><h1>Verify a student record</h1>
         <p className="muted">Paste the record token the student shared. Only the details they chose to share are shown. Presenting the token is the student's consent.</p></div></div>
       {status && (

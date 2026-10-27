@@ -19,6 +19,7 @@ A national register of student enrolments for AICTE-approved institutions. Every
 - [Demo accounts](#demo-accounts)
 - [Three demos](#three-demos)
 - [Screenshots](#screenshots)
+- [Look and feel](#look-and-feel)
 - [Architecture](#architecture)
 - [How "excess" is counted](#how-excess-is-counted)
 - [Validation rules](#validation-rules)
@@ -56,6 +57,8 @@ Today AICTE receives student-level data only from PGDM institutions; most others
 | **Signed, selectively disclosed records** | Ed25519-signed records in the SD-JWT style. The student chooses which details to share (e.g. institution and status, but not the APAAR ID), and a verifier checks them without signing in. Includes revocation, QR codes, and a printable certificate showing the APAAR ID next to the institution student ID. |
 | **Consent-based verification** | An employer needs the APAAR ID **and** date of birth; the response is identical whether or not they match; the student approves or declines; the employer then sees a fixed minimal set of fields. |
 | **Student correction requests** | Students see their own record and can ask for a correction. It lands in the institution's queue with a 14-day due date. |
+| **Self-service for institutions** | Add a single student through a form (same rules as uploads). Create and revoke API keys for the admission system; each key is shown once and only its hash is stored. |
+| **Intake administration** | AICTE sets approved intake per programme-year and can override any supernumerary cap with a recorded rule source; capacity checks re-run immediately. |
 | **Tamper-evident audit** | A hash-chained audit trail records every change, sign-in, export and **every denied access**. One click verifies the chain and names the first altered event. |
 
 ## Quick start
@@ -105,11 +108,11 @@ All accounts use the password **`Demo@2026`**. The login page has a one-click ac
 
 | Role | Email | Lands on |
 |---|---|---|
-| AICTE monitoring officer | `aicte.admin@demo.local` | National register, review queue, rules, audit |
+| AICTE monitoring officer | `aicte.admin@demo.local` | National register, review queue, intake and caps, rules, audit |
 | AICTE policy analyst | `aicte.analyst@demo.local` | National register (APAAR IDs masked) |
 | Auditor | `auditor@demo.local` | Audit trail and chain verification |
 | Employer / verifier | `verifier@demo.local` | Verify a record, request verification |
-| Institution nodal officer | `kaveri.admin@demo.local` (also `godavari`, `narmada`, `yamuna`, `brahmaputra`) | Institution dashboard; can declare submission and issue/revoke signed records |
+| Institution nodal officer | `kaveri.admin@demo.local` (also `godavari`, `narmada`, `yamuna`, `brahmaputra`) | Institution dashboard; can declare submission, issue/revoke signed records, manage API keys |
 | Institution data-entry staff | `kaveri.staff@demo.local` (same five institutions) | Upload, fix, commit, correct records |
 | Student | `student.ananya@demo.local` | Own record, consent requests, sharing, correction requests |
 
@@ -152,9 +155,22 @@ Each demo works by clicking through the UI ([`docs/DEMO_SCRIPT.md`](docs/DEMO_SC
 |---|---|
 | ![National register](docs/screenshots/aicte-admin_aicte_1360.png) **National register** with excess alerts | ![Review priority](docs/screenshots/aicte-admin_aicte_priority_1360.png) **Review priority** with a reason for every point |
 | ![Identity candidates](docs/screenshots/aicte-admin_aicte_identity_1360.png) **Identity candidates** with match weights | ![Audit trail](docs/screenshots/aicte-admin_audit_1360.png) **Audit trail** with chain verification |
+| ![Login](docs/screenshots/public_login_1360.png) **Sign-in page** with demo account picker | ![Phone](docs/screenshots/kaveri-admin_inst_390.png) **Phone width** (390 px) |
 | ![Student](docs/screenshots/student-ananya_me_1360.png) **Student**: own record, selective sharing | ![Verify](docs/screenshots/public_verify_1360.png) **Public verification** |
 
-All 50 screenshots, at desktop (1360 px) and phone (390 px) widths, are in [`docs/screenshots/`](docs/screenshots/).
+All 64 screenshots, at desktop (1360 px) and phone (390 px) widths, are in [`docs/screenshots/`](docs/screenshots/).
+
+## Look and feel
+
+The interface follows the familiar Indian government-portal layout:
+- an accessibility bar with *Skip to main content* and working **A− / A / A+** text-size controls;
+- a tricolour strip and a bilingual masthead (एपीएएआर छात्र रजिस्टर / APAAR Student Register);
+- a navy menu bar with a saffron underline, and a **What's new** strip showing the latest notifications;
+- a three-column footer.
+
+It uses an original logo mark, **not** the AICTE logo or the State Emblem of India (whose use is legally restricted). Every page says it is a prototype and not an official website. If AICTE authorises its logo, it drops into the `Logo` component in `frontend/src/App.tsx`.
+
+The layout is keyboard accessible with a visible focus ring and works down to 390 px phone width.
 
 ## Architecture
 
@@ -300,7 +316,7 @@ curl -s localhost:8000/.well-known/issuer-keys
 ## Testing
 
 ```bash
-make test        # 107 backend tests against an isolated temporary database
+make test        # 109 backend tests against an isolated temporary database
 make lint        # ruff
 make typecheck   # tsc --noEmit
 make seed && make run     # terminal 1
@@ -308,7 +324,7 @@ make demos                # terminal 2: Demos A, B, C via the API, PASS/FAIL per
 make tour                 # Playwright: every page at 1360 px and 390 px; fails on console errors
 ```
 
-Latest results (fresh clone): **107 passed**, lint and typecheck clean, **all 29 demo checks passed**, and the UI tour passed with 50 page views and 0 errors. Details are in [`docs/TEST_REPORT.md`](docs/TEST_REPORT.md).
+Latest results (fresh clone): **109 passed**, lint and typecheck clean, **all 29 demo checks passed**, and the UI tour passed with 64 page views and 0 errors. Details are in [`docs/TEST_REPORT.md`](docs/TEST_REPORT.md).
 
 ## Configuration
 
@@ -334,7 +350,7 @@ backend/app/
     ledger.py identity.py apaar_adapter.py   seat counting, name matching, SIMULATED registry
     intake.py issues.py credentials.py analytics.py events.py views.py
     api_*.py                             one router per area (auth, registry, imports, records, issues, ...)
-backend/tests/          pytest suite (107 tests)
+backend/tests/          pytest suite (109 tests)
 frontend/src/           React app: App.tsx (routes, role menus), api.ts, components/SeatStrip.tsx, pages/
 scripts/                run_demos.py (Demos A/B/C), ui_tour.py (Playwright)
 sample_data/            Demo A (CSV + XLSX) and Demo B files, written by the seed

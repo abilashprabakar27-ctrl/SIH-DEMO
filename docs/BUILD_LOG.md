@@ -29,15 +29,22 @@ Tell the new session: "Continue the build in HANDOFF.md, following docs/BUILD_PR
 | 6 | Credentials (SD-JWT style), verification, consent, certificate, QR | done + tested |
 | 7 | Dashboards, review priority, reports, seat-check, SSE, correction requests | done + tested |
 | 8 | Full seed + sample files + `scripts/run_demos.py` | done; demos A/B/C all PASS against live server |
-| 9 | React frontend + Playwright tour | done; tour PASSED (50 page views, 1360 + 390 px) |
+| 9 | React frontend + Playwright tour | done; tour PASSED (64 page views, 1360 + 390 px, including detail pages) |
 | 10 | Docs (README, DEMO_SCRIPT, TEST_REPORT, traceability, API design, gap analysis, .env.example) | done |
-| 11 | Clean-clone validation | done: setup, seed, run, demos, 107 tests, lint, tsc, tour all pass from a fresh clone |
+| 11 | Clean-clone validation | done: setup, seed, run, demos, 109 tests, lint, tsc, tour all pass from a fresh clone |
 
 Verified: `python -m pytest -q` from the repo root gives 107 passed (about 55 s). With the seed loaded and uvicorn running, `python scripts/run_demos.py` prints ALL DEMOS PASSED.
 
-All 11 steps are complete. Optional next steps:
-1. Polish: an ImportDetail screenshot in the tour (it needs an upload first), and a toggle in the UI to turn the APAAR adapter "unavailable" (R008 demo).
-2. Production items: see docs/PRODUCTION_GAP_ANALYSIS.md.
+All 11 steps are complete. After the prompt audit, these gaps were closed:
+- a manual-entry UI (`/inst/add`);
+- self-service API keys (`/inst/system-access`, plus `POST/GET /integration/clients` and revoke);
+- an AICTE *Intake and caps* page (`/aicte/intakes`);
+- notifications shown in a "What's new" strip;
+- a UI tour that now covers the detail pages.
+
+The UI was restyled to the government-portal pattern: gov bar with A−/A/A+, tricolour, bilingual masthead, navy menu, footer. It uses an original logo, not the AICTE logo or emblem.
+
+Optional next: a UI toggle for the APAAR adapter "unavailable" mode (R008 demo); see docs/PRODUCTION_GAP_ANALYSIS.md.
 
 Frontend: `frontend/src` (App.tsx routes and role nav; api.ts fetch, downloads and SSE hook; components/SeatStrip.tsx; pages/*). Build with `make build`; FastAPI serves `frontend/dist`.
 

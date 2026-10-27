@@ -1,6 +1,6 @@
 # Test report
 
-Run on 27 Oct 2026 from a **fresh clone** of branch `claude/busy-newton-qnsfmy`. The environment was Linux, Python 3.13, Node 22 and Chromium 1243.
+Run on 27 Oct 2026. The table was first produced from a **fresh clone**; the tests, demos and tour were re-run after the government-portal restyle and the gap fixes of branch `claude/busy-newton-qnsfmy`. The environment was Linux, Python 3.13, Node 22 and Chromium 1243.
 Every number below was observed in that run. Nothing is estimated.
 
 | Step | Command | Result |
@@ -8,11 +8,11 @@ Every number below was observed in that run. Nothing is estimated.
 | Setup | `make setup` | OK in 21 s (venv, pip, npm install, `tsc --noEmit` + Vite build) |
 | Seed | `make seed` | OK in 4.9 s. 10 import jobs and 1,347 enrolment rows committed through the validation engine (2025-26: 627; 2026-27: 720) |
 | Health | `curl /api/health` | `{"status":"ok","apaar_registry":"SIMULATED","data":"synthetic"}`; `/` serves the built frontend |
-| Backend tests | `make test` (`pytest -q`) | **107 passed**, 0 failed, 1 warning (Starlette TestClient/httpx deprecation notice), 58.6 s |
+| Backend tests | `make test` (`pytest -q`) | **109 passed**, 0 failed, 1 warning (Starlette TestClient/httpx deprecation notice), 58.4 s |
 | Lint | `make lint` (`ruff check backend scripts`) | All checks passed |
 | Typecheck | `make typecheck` (`tsc --noEmit`) | No errors |
 | Demos | `make demos` (`scripts/run_demos.py`) | **ALL DEMOS PASSED**: 29 expectations, 0 failed; audit chain valid over 1,448 events |
-| UI tour | `make tour` (`scripts/ui_tour.py`) | **UI TOUR PASSED**: 50 page views (2 public pages + 23 role pages, each at 1360 px and 390 px); 0 console errors, 0 error banners, 0 horizontal scroll. Screenshots in `docs/screenshots/` |
+| UI tour | `make tour` (`scripts/ui_tour.py`) | **UI TOUR PASSED**: 64 page views (2 public pages + 30 role pages including import, record and flag detail pages, each at 1360 px and 390 px); 0 console errors, 0 error banners, 0 horizontal scroll. Screenshots in `docs/screenshots/` |
 
 ## Demo results (key numbers)
 - **Demo A:**
@@ -37,7 +37,7 @@ Every number below was observed in that run. Nothing is estimated.
   - Godavari got 404 on Ananya's record.
   - The correction request appeared in Kaveri's queue.
 
-## What the 107 tests cover (`backend/tests/`)
+## What the 109 tests cover (`backend/tests/`)
 
 | File | Tests | Covers |
 |---|---|---|
@@ -49,7 +49,7 @@ Every number below was observed in that run. Nothing is estimated.
 | `test_corrections.py` | 5 | Optimistic lock 409 and revision with reason; re-validation rejects an invalid seat; invalid transition 422, WITHDRAWN→ACTIVE; pending-APAAR student later gets an ID on the same record; manual entry needs acknowledgement for REVIEW |
 | `test_demo_b.py` | 1 | End-to-end Demo B including redaction, the permission matrix, the review workflow, auto-resolve and reopen |
 | `test_credentials.py` | 9 | Issue permissions; valid selective disclosure; altered payload; altered disclosure; undisclosed claims hidden; unknown kid; garbage; expired; superseded; revoked with reason; JWKS; certificate shows both IDs and QR; consent (no-match indistinguishable, 403 before consent, fixed fields only); correction-request queue |
-| `test_platform.py` | 10 | Integration: bad key 401, missing Idempotency-Key 400, idempotent replay, same key with a different body 409, rejected row, missing scope 403; honest integration status; audit chain valid, then tampering one row reports that row's seq; national totals equal direct SQL counts; review priority with disclaimer; CSV injection; rules admin (locked 409); SSE scoping; stream-token required |
+| `test_platform.py` | 12 | Integration: bad key 401, missing Idempotency-Key 400, idempotent replay, same key with a different body 409, rejected row, missing scope 403; honest integration status; audit chain valid, then tampering one row reports that row's seq; national totals equal direct SQL counts; review priority with disclaimer; CSV injection; rules admin (locked 409); SSE scoping; stream-token required; API keys (create shown once, scope enforced, other institution 404, revoke then 401, staff 403); notifications listed |
 
 ## Reproduce
 ```bash

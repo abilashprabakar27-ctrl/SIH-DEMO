@@ -8,13 +8,23 @@ import json
 from fastapi import APIRouter, Depends, Header
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import audit
 from ..config import settings
 from ..db import get_db
-from ..models import IdempotencyRecord, Institution
-from ..security import Actor, ApiError, api_client, current_actor, require_scope
+from ..models import IdempotencyRecord, Institution, IntegrationClient
+from ..security import (
+    Actor,
+    ApiError,
+    api_client,
+    current_actor,
+    hash_api_key,
+    new_api_key,
+    require_roles,
+    require_scope,
+)
 from . import engine, events, issues
 from .apaar_adapter import get_adapter
 
@@ -85,3 +95,53 @@ def integration_status(actor: Actor = Depends(current_actor)):
             {"name": "Live event stream (SSE)", "state": "LIVE", "subscribers": events.subscriber_count()},
         ]
     }
+
+
+# ---------------------------------------------------------------- API keys for institution systems
+
+SCOPES = ("enrolments:write", "seat:check")
+
+
+def _client_view(c: IntegrationClient) -> dict:
+    return {"id": c.id, "name": c.name, "key_prefix": c.key_prefix, "scopes": c.scopes, "active": c.active,
+            "created_at": c.created_at.isoformat()}
+
+
+@router.get("/clients")
+def list_clients(actor: Actor = Depends(require_roles("INST_ADMIN")), db: Session = Depends(get_db)):
+    rows = db.execute(select(IntegrationClient).where(IntegrationClient.institution_id == actor.institution_id)
+                      .order_by(IntegrationClient.created_at.desc())).scalars()
+    return [_client_view(c) for c in rows]
+
+
+class ClientIn(BaseModel):
+    name: str = Field(min_length=3, max_length=200)
+    scopes: list[str] = Field(min_length=1)
+
+
+@router.post("/clients")
+def create_client(body: ClientIn, actor: Actor = Depends(require_roles("INST_ADMIN")), db: Session = Depends(get_db)):
+    """Create an API key for an institution system. The full key is returned once; only its hash is stored."""
+    bad = [s for s in body.scopes if s not in SCOPES]
+    if bad:
+        raise ApiError(422, "Unknown scope(s): " + ", ".join(bad) + ". Allowed: " + ", ".join(SCOPES))
+    key, prefix = new_api_key()
+    c = IntegrationClient(name=body.name, key_prefix=prefix, key_hash=hash_api_key(key),
+                          institution_id=actor.institution_id, scopes=sorted(set(body.scopes)))
+    db.add(c)
+    db.flush()
+    audit.record(db, actor, "integration.key_create", "integration_client", c.id,
+                 detail={"prefix": prefix, "scopes": c.scopes})
+    db.commit()
+    return dict(_client_view(c), api_key=key, note="Copy this key now. It is shown only once.")
+
+
+@router.post("/clients/{client_id}/revoke")
+def revoke_client(client_id: str, actor: Actor = Depends(require_roles("INST_ADMIN")), db: Session = Depends(get_db)):
+    c = db.get(IntegrationClient, client_id)
+    if c is None or c.institution_id != actor.institution_id:
+        raise ApiError(404, "Not found.")
+    c.active = False
+    audit.record(db, actor, "integration.key_revoke", "integration_client", c.id, detail={"prefix": c.key_prefix})
+    db.commit()
+    return _client_view(c)

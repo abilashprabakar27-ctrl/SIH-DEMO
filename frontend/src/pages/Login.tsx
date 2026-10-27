@@ -36,9 +36,8 @@ export default function Login() {
   return (
     <div className="login">
       <section className="card">
-        <p className="pill sim" style={{ marginBottom: 12 }}>APAAR checks simulated · synthetic data</p>
-        <h1>APAAR Student Register</h1>
-        <p className="muted">A register of student enrolments for AICTE-approved institutions, keyed to APAAR ID. Prototype for SIH26263.</p>
+        <h1 style={{ color: "var(--navy)" }}>Sign in</h1>
+        <p className="muted">For AICTE officers, institution nodal officers and staff, auditors, verifiers and students.</p>
         <form onSubmit={submit} style={{ marginTop: 16 }}>
           <Field label="Email"><input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required /></Field>
           <Field label="Password"><input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></Field>
@@ -46,6 +45,12 @@ export default function Login() {
           <button type="submit" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
         </form>
         <p style={{ marginTop: 20 }}><Link to="/verify">Verify a record without signing in →</Link></p>
+        <h2 style={{ marginTop: 24 }}>About the register</h2>
+        <ul className="small" style={{ paddingLeft: 18 }}>
+          <li>Student-level enrolment records from every AICTE-approved institution, keyed to APAAR ID.</li>
+          <li>Every record checked automatically against one rule set; seats counted against approved intake and category caps.</li>
+          <li>Signed records that students share selectively; employers verify only with the student's consent.</li>
+        </ul>
       </section>
       <section className="card">
         <h2>Demo accounts</h2>
