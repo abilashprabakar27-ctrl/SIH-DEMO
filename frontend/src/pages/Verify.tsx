@@ -64,7 +64,7 @@ export default function Verify() {
       <ErrorBox error={err} />
       {res && (
         <section className="card" aria-live="polite">
-          <div className={`banner ${res.valid ? "ok" : "error"}`}><strong>{res.valid ? "Genuine and current" : "Do not rely on this record"}</strong>
+          <div className={`banner ${res.valid ? "ok" : "error"}`}><strong>{res.valid ? "Integrity and status checks passed" : "Do not rely on this record"}</strong>
             {!res.valid && " — one or more checks failed."}</div>
           {res.checks.map((c: any) => (
             <div className="check" key={c.check}>

@@ -18,15 +18,16 @@ from __future__ import annotations
 import re
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from ..models import Enrolment, IdentityCandidate, Student
-from .normalize import name_tokens
+from .normalize import name_key, name_tokens
 
 REVIEW_THRESHOLD = 9.0
 LIST_THRESHOLD = 6.0
 JW_THRESHOLD = 0.92
+HONORIFICS = {"mr", "mrs", "ms", "miss", "dr", "prof", "shri", "sri", "smt", "kumari"}
 
 _FOLDS = [("aa", "a"), ("ee", "i"), ("oo", "u"), ("th", "t"), ("dh", "d"), ("bh", "b"), ("kh", "k"),
           ("ph", "f"), ("w", "v"), ("z", "j")]
@@ -119,10 +120,11 @@ def swapped(d: date) -> date | None:
 def score_pair(a: dict, b: dict) -> tuple[float, list[dict]]:
     """a/b: {full_name, date_of_birth, gender, apaar_id, transfer_linked?}. Returns (score, weights)."""
     weights: list[dict] = []
-    ta, tb = name_tokens(a["full_name"]), name_tokens(b["full_name"])
-    if sorted(ta) == sorted(tb):
+    ta = [t for t in name_tokens(a["full_name"]) if t not in HONORIFICS]
+    tb = [t for t in name_tokens(b["full_name"]) if t not in HONORIFICS]
+    if ta and tb and sorted(ta) == sorted(tb):
         weights.append({"factor": "Same name tokens", "weight": 6.0})
-    else:
+    elif ta and tb:
         eq, ini = _match_tokens(ta, tb)
         same_count = len(ta) == len(tb)
         if same_count and eq == len(ta):
@@ -167,7 +169,10 @@ def find_candidates(
 ) -> list[dict]:
     """Existing students that may be the same person, scored >= LIST_THRESHOLD, best first."""
     exclude = exclude_student_ids or set()
-    q = select(Student).where(Student.date_of_birth.in_(_blocking_dobs(dob)))
+    # Two independent blocking passes: DOB (including common day/month swaps), and exact
+    # normalized-name key. The latter catches DOB entry errors without broad table scans.
+    q = select(Student).where(or_(Student.date_of_birth.in_(_blocking_dobs(dob)),
+                                 Student.name_key == name_key(full_name)))
     out = []
     for st in db.execute(q).scalars():
         if st.id in exclude:

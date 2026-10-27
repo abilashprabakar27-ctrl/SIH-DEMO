@@ -76,6 +76,41 @@ def test_default_caps_rounding(intake, disc, level, fn, ciwg, tfw):
     assert all(v["rule_source"] for v in c.values())
 
 
+def test_seeded_versioned_rules_use_integer_caps(db):
+    from app.models import CapacityRuleSet
+    from app.modules.capacity_rules import caps_from_rule_set, resolve_rule_set
+
+    rules = resolve_rule_set(db, "2026-27")
+    assert rules is not None and rules.verification_status == "UNVERIFIED"
+    assert rules.source_type == "SECONDARY"
+    assert len(db.execute(select(CapacityRuleSet)).scalars().all()) == 2
+    engineering = caps_from_rule_set(db, rules, 60, "ENGINEERING", "UG")
+    management = caps_from_rule_set(db, rules, 60, "MANAGEMENT", "PG")
+    small = caps_from_rule_set(db, rules, 10, "ENGINEERING", "UG")
+    assert [engineering[k]["cap_seats"] for k in ("SN_FN_OCI", "SN_CIWG", "SN_TFW")] == [6, 3, 3]
+    assert [management[k]["cap_seats"] for k in ("SN_FN_OCI", "SN_CIWG", "SN_TFW")] == [10, 5, 3]
+    assert [small[k]["cap_seats"] for k in ("SN_FN_OCI", "SN_CIWG", "SN_TFW")] == [1, 0, 0]
+
+
+def test_rule_set_impact_and_activation_are_audited(client, as_, db):
+    from sqlalchemy import select
+
+    from app.models import AuditEvent, CapacityRuleSet, SupernumeraryQuota
+
+    h = as_("aicte.admin@demo.local")
+    draft = db.execute(select(CapacityRuleSet).where(CapacityRuleSet.status == "DRAFT")).scalar_one()
+    impact = client.post(f"/api/v1/rule-sets/{draft.id}/impact", headers=h)
+    assert impact.status_code == 200, impact.text
+    assert impact.json()["programmes"]
+    response = client.post(f"/api/v1/rule-sets/{draft.id}/activate", headers=h,
+                           json={"reason": "Exercise the documented draft rule set in a test."})
+    assert response.status_code == 200, response.text
+    db.refresh(draft)
+    assert draft.status == "ACTIVE"
+    assert db.execute(select(SupernumeraryQuota).where(SupernumeraryQuota.rule_set_id == draft.id)).first()
+    assert db.execute(select(AuditEvent).where(AuditEvent.action == "capacity_rules.activated")).first()
+
+
 def test_withdrawn_not_counted_db(db):
     inst = db.execute(select(Institution).where(Institution.short_name == "kaveri")).scalar_one()
     prog = db.execute(select(Programme).where(Programme.institution_id == inst.id,

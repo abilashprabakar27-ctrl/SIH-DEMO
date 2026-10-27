@@ -7,9 +7,11 @@ commit_values(). Pipeline: normalise -> row rules -> adapter -> file rules -> re
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -55,6 +57,9 @@ class RowPlan:
     student_id: str | None = None  # existing student this row resolves to
     enrolment_id: str | None = None  # existing enrolment this row updates
     adapter_status: str | None = None
+    adapter_mode: str | None = None
+    adapter_version: str | None = None
+    adapter_checked_at: datetime | None = None
     candidates: list[dict] = field(default_factory=list)
     xinst: list[dict] = field(default_factory=list)
 
@@ -191,6 +196,9 @@ def validate_rows(
         aid = p.parsed["apaar_id"]
         res = adapter.check(registry.get(aid), p.parsed["full_name"], p.parsed["date_of_birth"])
         p.adapter_status = res.status
+        p.adapter_mode = res.mode
+        p.adapter_version = res.adapter_version
+        p.adapter_checked_at = res.checked_at
         if res.status in ("NOT_FOUND", "INACTIVE"):
             sugg = did_you_mean(db, aid, p.parsed["full_name"], p.parsed["date_of_birth"]) if res.status == "NOT_FOUND" else None
             p.findings.append(finding(
@@ -431,6 +439,14 @@ def commit_values(
     q = plan.parsed
     actor_id = getattr(actor, "id", None)
     year = q["academic_year"] or academic_year
+    record_hash = hashlib.sha256(json.dumps(
+        {"institution_id": institution.id, "year": year, "data": plan.data},
+        sort_keys=True, ensure_ascii=False, separators=(",", ":"),
+    ).encode("utf-8")).hexdigest()
+    if plan.enrolment_id:
+        existing_enrolment = db.get(Enrolment, plan.enrolment_id)
+        if existing_enrolment and existing_enrolment.content_hash == record_hash:
+            return existing_enrolment
     new_student = plan.student_id is None
     attrs = {k: q[k] for k in STUDENT_FIELDS}
     attrs["name_key"] = name_key(q["full_name"])
@@ -440,6 +456,9 @@ def commit_values(
             apaar_id=q["apaar_id"],
             apaar_ref=apaar_ref(q["apaar_id"]),
             apaar_status=_apaar_status(plan),
+            apaar_verified_mode=plan.adapter_mode if plan.adapter_status == "OK" else None,
+            apaar_verified_at=plan.adapter_checked_at if plan.adapter_status == "OK" else None,
+            apaar_adapter_version=plan.adapter_version if plan.adapter_status == "OK" else None,
             apaar_pending_reason=None if q["apaar_id"] else q["apaar_pending_reason"],
             version=1,
             **attrs,
@@ -453,7 +472,10 @@ def commit_values(
         changes = {}
         if q["apaar_id"] and st.apaar_id != q["apaar_id"]:
             changes.update(_set_fields(st, {"apaar_id": q["apaar_id"], "apaar_ref": apaar_ref(q["apaar_id"]),
-                                            "apaar_status": _apaar_status(plan), "apaar_pending_reason": None}))
+                                            "apaar_status": _apaar_status(plan), "apaar_pending_reason": None,
+                                            "apaar_verified_mode": plan.adapter_mode if plan.adapter_status == "OK" else None,
+                                            "apaar_verified_at": plan.adapter_checked_at if plan.adapter_status == "OK" else None,
+                                            "apaar_adapter_version": plan.adapter_version if plan.adapter_status == "OK" else None}))
             changes.pop("apaar_ref", None)
             if "apaar_id" in changes:
                 changes["apaar_id"] = {"old": "(none)" if not changes["apaar_id"]["old"] else "(previous ID)",
@@ -492,6 +514,7 @@ def commit_values(
             import_job_id=import_job_id,
             status=status or "ACTIVE",
             version=1,
+            content_hash=record_hash,
             **enrol_values,
         )
         db.add(en)
@@ -501,6 +524,7 @@ def commit_values(
                      reason, actor_id)
         action = "enrolment.create"
     db.flush()
+    en.content_hash = record_hash
     audit.record(db, actor, action, "enrolment", en.id,
                  detail={"source": source, "apaar_ref": st.apaar_ref, "row_status": plan.status},
                  institution_id=institution.id)

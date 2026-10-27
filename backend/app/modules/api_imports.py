@@ -135,6 +135,16 @@ def commit(job_id: str, actor: Actor = Depends(inst_user), db: Session = Depends
     return dict(result, job=job_view(job))
 
 
+@router.post("/{job_id}/recover")
+def recover(job_id: str, actor: Actor = Depends(inst_user), db: Session = Depends(get_db)):
+    job = intake.get_job(db, job_id, actor)
+    recovered = intake.recover_expired_jobs(db, actor, job.id)
+    if recovered == 0:
+        raise ApiError(409, "This upload does not have an expired commit lease.")
+    db.refresh(job)
+    return {"recovered": True, "job": job_view(job)}
+
+
 @router.post("/{job_id}/discard")
 def discard(job_id: str, actor: Actor = Depends(inst_user), db: Session = Depends(get_db)):
     job = intake.get_job(db, job_id, actor)

@@ -13,6 +13,7 @@ from app.modules.normalize import name_key
 def test_name_key_and_fold():
     assert name_key("  Sanjana  BALAJI ") == "balaji sanjana"
     assert name_key("Balaji, Sanjana") == "balaji sanjana"
+    assert name_key("श्री राम")
     assert phonetic_fold("mohammed") == phonetic_fold("mohamed")
     assert phonetic_fold("karthik") == phonetic_fold("kartik")
     assert phonetic_fold("deepa") == phonetic_fold("dipa")
@@ -26,6 +27,16 @@ def test_vignesh_spelling_variant_scores_review():
     )
     assert s >= 9 and s == 9.5
     assert {x["factor"] for x in w} >= {"Same date of birth", "Same gender"}
+
+
+def test_honorific_does_not_change_identity_score_and_honorific_only_is_not_a_name_match():
+    base = {"date_of_birth": date(2000, 1, 1), "gender": None, "apaar_id": None}
+    plain, _ = score_pair(dict(base, full_name="Anita Sharma"), dict(base, full_name="Anita Sharma"))
+    titled, _ = score_pair(dict(base, full_name="Dr Anita Sharma"), dict(base, full_name="Anita Sharma"))
+    empty, weights = score_pair(dict(base, full_name="Dr"), dict(base, full_name="Prof"))
+    assert plain == titled
+    assert not any("name" in x["factor"].lower() for x in weights)
+    assert empty == 4  # DOB evidence only; an honorific alone is not a name match.
 
 
 def test_initials_listed_band():

@@ -355,6 +355,11 @@ def verify(db: Session, token: str, now: datetime | None = None) -> dict:
             result["notes"].append("The enrolment status has changed since this record was issued. "
                                    "Ask the student for a current record.")
     result["valid"] = all(c["result"] == "pass" for c in checks)
+    if result["valid"]:
+        result["notes"].append(
+            "The signature confirms the issuer-signed contents and disclosed values were not altered; "
+            "it does not independently confirm that the source enrolment data was true."
+        )
     return result
 
 

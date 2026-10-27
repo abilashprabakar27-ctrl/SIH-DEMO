@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, Header
 from fastapi.responses import JSONResponse
@@ -13,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from .. import audit
 from ..config import settings
-from ..db import get_db
+from ..db import get_db, utcnow
 from ..models import IdempotencyRecord, Institution, IntegrationClient
 from ..security import (
     Actor,
@@ -45,6 +46,10 @@ def push_enrolments(body: PushIn, idempotency_key: str | None = Header(default=N
     key = f"{actor.id}:{idempotency_key}"
     body_hash = hashlib.sha256(json.dumps(body.model_dump(), sort_keys=True).encode()).hexdigest()
     prior = db.get(IdempotencyRecord, key)
+    if prior is not None and prior.expires_at is not None and prior.expires_at <= utcnow():
+        db.delete(prior)
+        db.flush()
+        prior = None
     if prior is not None:
         if prior.request_sha256 != body_hash:
             raise ApiError(409, "This Idempotency-Key was already used with a different request body.")
@@ -67,7 +72,8 @@ def push_enrolments(body: PushIn, idempotency_key: str | None = Header(default=N
     response = {"accepted": sum(1 for r in results if r["outcome"] != "REJECTED"),
                 "rejected": sum(1 for r in results if r["outcome"] == "REJECTED"), "results": results,
                 "apaar_check_mode": "SIMULATED"}
-    db.add(IdempotencyRecord(key=key, request_sha256=body_hash, response=response, status_code=200))
+    db.add(IdempotencyRecord(key=key, request_sha256=body_hash, response=response, status_code=200,
+                             expires_at=utcnow() + timedelta(hours=72)))
     audit.record(db, actor, "integration.push", "integration_client", actor.id,
                  detail={"accepted": response["accepted"], "rejected": response["rejected"]})
     db.commit()
@@ -78,11 +84,15 @@ def push_enrolments(body: PushIn, idempotency_key: str | None = Header(default=N
 def integration_status(actor: Actor = Depends(current_actor)):
     """Honest integration states. Nothing here pretends to be a live national integration."""
     adapter = get_adapter()
+    registry_state = "SIMULATED" if adapter.mode == "SIMULATED" else getattr(adapter, "state", adapter.mode)
+    registry_detail = ("Checks run against a synthetic registry table. No official APAAR API contract or credentials "
+                       "were available; a live adapter replaces it behind the same interface."
+                       if adapter.mode == "SIMULATED" else
+                       "No real registry request is made. A contract-backed API schema and credentials are still required.")
     return {
         "integrations": [
-            {"name": "APAAR registry verification", "state": "SIMULATED",
-             "detail": "Checks run against a synthetic registry table. No official APAAR API contract or credentials "
-                       "were available; a live adapter replaces it behind the same interface.",
+            {"name": "APAAR registry verification", "state": registry_state,
+             "detail": registry_detail,
              "available": adapter.available},
             {"name": "Institution ERP push (this API)", "state": "LIVE",
              "detail": "POST /api/v1/integration/enrolments with X-API-Key and Idempotency-Key."},
@@ -94,6 +104,41 @@ def integration_status(actor: Actor = Depends(current_actor)):
             {"name": "Degree-awarding body data feed", "state": "NOT_IMPLEMENTED", "detail": "Planned (requirement 10)."},
             {"name": "Live event stream (SSE)", "state": "LIVE", "subscribers": events.subscriber_count()},
         ]
+    }
+
+
+@router.get("/system/status")
+def system_status(actor: Actor = Depends(current_actor)):
+    """Expose prototype capability states without implying production integrations."""
+    adapter = get_adapter()
+    return {
+        "environment": settings.app_env,
+        "registry": {"mode": adapter.mode,
+                     "state": "SIMULATED" if adapter.mode == "SIMULATED" else getattr(adapter, "state", adapter.mode),
+                     "available": adapter.available,
+                     "contract_status": "NO_OFFICIAL_CONTRACT", "production_verification": False},
+        "capacity_rules": {"status": "VERSIONED", "source_verification": "UNVERIFIED"},
+        "credentials": {"status": "IMPLEMENTED", "key_registry": "NOT_IMPLEMENTED"},
+        "audit": {"status": "TAMPER_EVIDENT", "database_immutability": False},
+        "imports": {"status": "IMPLEMENTED", "lease_recovery": "IMPLEMENTED"},
+        "prototype_features": [
+            {"feature": "APAAR registry check", "state": "SIMULATED", "detail": "Synthetic registry only; no official API contract."},
+            {"feature": "AICTE capacity rules", "state": "VERSIONED_UNVERIFIED", "detail": "Versioned prototype values; policy sources need confirmation."},
+            {"feature": "Institution uploads", "state": "IMPLEMENTED", "detail": "Validation, correction, retry and commit lease recovery."},
+            {"feature": "Identity matching", "state": "REVIEW_ASSIST", "detail": "Heuristic candidates; no automatic merge or rejection."},
+            {"feature": "Flag explanations and outcomes", "state": "IMPLEMENTED", "detail": "Evidence hash, rule snapshot and human closure outcome."},
+            {"feature": "Credentials", "state": "PROTOTYPE", "detail": "Signed selective-disclosure records; signature does not prove source-data truth."},
+            {"feature": "QR verification", "state": "STATUS_ONLY", "detail": "QR checks record status; claims require a student-shared token or consent."},
+            {"feature": "Privacy and access", "state": "PROTOTYPE", "detail": "Role and institution scoping; consent, retention and production review remain incomplete."},
+            {"feature": "Audit trail", "state": "TAMPER_EVIDENT", "detail": "Hash-chain verification; no database-level immutability or external anchor."},
+            {"feature": "End-to-end demos", "state": "A_B_C_VERIFIED", "detail": "Synthetic upload, review, credential and verification demos."},
+        ],
+        "production_ready": False,
+        "production_blockers": [
+            "Official APAAR contract and credentials are unavailable.",
+            "Capacity rule sources and effective dates require verification.",
+            "Credential key lifecycle, privacy review, and production database migration remain incomplete.",
+        ],
     }
 
 

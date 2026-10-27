@@ -1,0 +1,9 @@
+# NOT an official APAAR API. This is a placeholder that documents the integration gate only.
+contract_status: PROVISIONAL
+notice: "NOT an official API; do not send real student data to this example."
+authority: null
+contract_reference: null
+request_schema: null
+response_schema: null
+endpoint: null
+credential_reference: null

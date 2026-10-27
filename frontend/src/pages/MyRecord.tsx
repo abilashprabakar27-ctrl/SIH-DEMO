@@ -62,8 +62,9 @@ export default function MyRecord() {
           <h2>Verification requests waiting for you</h2>
           {pending.map((r) => (
             <div key={r.id} className="row between" style={{ padding: "6px 0" }}>
-              <span><strong>{r.requester_org}</strong> · {r.purpose} <span className="small muted">expires {fmtDate(r.expires_at)}</span></span>
-              <button onClick={() => setConsent(r)}>Review request</button>
+              <span><strong>{r.requester_org}</strong> · {r.purpose} <span className="small muted">expires {fmtDate(r.expires_at)}</span>
+                {r.consent_hold_reason && <div className="small banner warn">Guardian consent is required. This prototype cannot collect guardian consent, so this request is on hold.</div>}</span>
+              {!r.consent_hold_reason && <button onClick={() => setConsent(r)}>Review request</button>}
             </div>
           ))}
         </section>
