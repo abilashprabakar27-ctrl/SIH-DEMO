@@ -98,8 +98,9 @@ def test_r006_not_found_and_did_you_mean(db, kaveri):
 
 
 def test_did_you_mean_none_when_two_variants_match(db, kaveri):
-    from app.models import SimApaarRegistry
     from datetime import date
+
+    from app.models import SimApaarRegistry
     # Two near-variants registered with the same name and DOB -> ambiguous -> no suggestion
     db.add(SimApaarRegistry(apaar_id="911100000088", full_name="Sanjana Balaji", date_of_birth=date(2008, 6, 5)))
     db.flush()
