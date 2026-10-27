@@ -33,11 +33,11 @@ Tell the new session: "Continue the build in HANDOFF.md, following docs/BUILD_PR
 | 10 | Docs (README, DEMO_SCRIPT, TEST_REPORT, traceability, API design, gap analysis, .env.example) | NOT STARTED |
 | 11 | Clean-clone validation | NOT STARTED |
 
+Verified: `python -m pytest -q` from the repo root gives 107 passed (about 55 s). With the seed loaded and uvicorn running, `python scripts/run_demos.py` prints ALL DEMOS PASSED.
+
 Immediate next actions:
-1. Write `backend/tests/` (conftest with a temp `APAAR_VAR_DIR` + `DATABASE_URL`, then the cases in BUILD_PROMPT §11). Run them and fix what fails.
-2. Write `scripts/run_demos.py` (Demos A, B and C against the API; see §10) and check the Demo A preview gives 5 VALID, 2 REVIEW, 9 ERROR.
-3. Build the frontend (`frontend/`, Vite + React + TS), served by FastAPI from `frontend/dist`.
-4. Write the docs, Makefile, `.env.example` and Playwright tour.
+1. Build the frontend (`frontend/`, Vite + React + TS, hash routes), served by FastAPI from `frontend/dist`.
+2. Write the docs, Makefile, `.env.example` and Playwright tour (`scripts/ui_tour.py`).
 
 ## Code map (backend/app)
 - `config.py`: settings; secrets are generated into `var/`; `APAAR_TODAY` overrides today's date for tests.
@@ -77,5 +77,4 @@ Immediate next actions:
 - Review-priority "seats over intake" uses institution totals (excess ÷ total intake). Overdue correction requests add min(10, 3×n).
 
 ## Known issues / not yet verified
-- No tests have been run yet. Treat every module as unverified until §11 tests pass.
-- SSE has been written but not exercised.
+- The backend is verified by tests and the demos. The frontend has not been started.
