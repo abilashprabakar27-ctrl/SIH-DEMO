@@ -81,6 +81,14 @@ def issuer_key() -> IssuerKey:
     if _key is None and os.environ.get("ISSUER_PRIVATE_KEY_PEM"):
         pem = os.environ["ISSUER_PRIVATE_KEY_PEM"].replace("\\n", "\n").encode()
         _key = IssuerKey(serialization.load_pem_private_key(pem, password=None))
+    if _key is None and settings.database_url.startswith("postgresql"):
+        from ..secret_store import db_secret
+
+        def _new_pem() -> str:
+            return Ed25519PrivateKey.generate().private_bytes(
+                serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()).decode()
+
+        _key = IssuerKey(serialization.load_pem_private_key(db_secret("issuer_ed25519_pem", _new_pem).encode(), password=None))
     if _key is None:
         path = settings.var_dir / "issuer_ed25519.pem"
         if not path.exists():

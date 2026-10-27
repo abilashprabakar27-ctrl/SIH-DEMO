@@ -52,8 +52,6 @@ class Settings:
     def __init__(self) -> None:
         self.var_dir = _var_dir()
         self.database_url = _database_url(self.var_dir)
-        self.jwt_secret = _secret_file("jwt_secret", "JWT_SECRET")
-        self.apaar_hmac_key = _secret_file("apaar_hmac_key", "APAAR_HMAC_KEY")
         self.token_minutes = int(os.environ.get("TOKEN_MINUTES", "120"))
         vercel_host = os.environ.get("VERCEL_PROJECT_PRODUCTION_URL")
         default_base = f"https://{vercel_host}" if vercel_host else "http://localhost:8000"
@@ -71,6 +69,24 @@ class Settings:
         self.adapter_mode = os.environ.get("APAAR_ADAPTER_MODE", "simulated")  # simulated | unavailable
         self.live_events = os.environ.get("LIVE_EVENTS", "0" if ON_VERCEL else "1") == "1"
         self.frontend_dist = Path(os.environ.get("FRONTEND_DIST", REPO_ROOT / "frontend" / "dist"))
+
+
+    def _secret(self, name: str, env: str) -> str:
+        if os.environ.get(env):
+            return os.environ[env]
+        if self.database_url.startswith("postgresql"):
+            from .secret_store import db_secret
+
+            return db_secret(name, lambda: secrets.token_hex(32))
+        return _secret_file(name, env)
+
+    @property
+    def jwt_secret(self) -> str:
+        return self._secret("jwt_secret", "JWT_SECRET")
+
+    @property
+    def apaar_hmac_key(self) -> str:
+        return self._secret("apaar_hmac_key", "APAAR_HMAC_KEY")
 
 
 settings = Settings()
