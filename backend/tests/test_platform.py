@@ -186,6 +186,21 @@ def test_system_status_clearly_marks_registry_as_simulated(client, as_):
     assert status["registry"]["mode"] == "SIMULATED"
     assert status["registry"]["production_verification"] is False
     assert status["production_ready"] is False
+    feature_status = {f["feature"]: f["state"] for f in status["prototype_features"]}
+    assert feature_status["APAAR registry check"] == "SIMULATED"
+    assert feature_status["QR verification"] == "STATUS_ONLY"
+
+
+def test_rule_history_and_outcome_metrics_are_visible_to_admin(client, as_):
+    admin = as_("aicte.admin@demo.local")
+    assert client.patch("/api/v1/rules/R011_DATE_UNUSUAL", headers=admin,
+                        json={"enabled": False}).status_code == 200
+    history = client.get("/api/v1/rules/history", headers=admin)
+    assert history.status_code == 200 and history.json()
+    assert history.json()[0]["version"] >= 2
+    metrics = client.get("/api/v1/rules/metrics", headers=admin)
+    assert metrics.status_code == 200 and "total_flags" in metrics.json()
+    assert client.get("/api/v1/rules/metrics", headers=as_("kaveri.admin@demo.local")).status_code == 403
 
 
 def test_disabled_adapter_schema_has_no_synthetic_registry_table(tmp_path):

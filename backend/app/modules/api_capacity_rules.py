@@ -21,7 +21,7 @@ from ..models import (
 )
 from ..security import AICTE_ROLES, Actor, ApiError, current_actor, require_roles
 from . import issues, ledger
-from .capacity_rules import caps_from_rule_set
+from .capacity_rules import applies_to_academic_year, caps_from_rule_set
 from .normalize import SUPERNUMERARY, valid_academic_year
 
 router = APIRouter(prefix="/api/v1/rule-sets", tags=["capacity rules"])
@@ -95,6 +95,11 @@ def create_rule_set(body: RuleSetIn, actor: Actor = Depends(require_roles("AICTE
         raise ApiError(422, "Academic year range must use YYYY-YY values.")
     if body.academic_year_from > body.academic_year_to:
         raise ApiError(422, "Academic year range is reversed.")
+    if body.effective_to is not None and body.effective_to < body.effective_from:
+        raise ApiError(422, "Effective date range is reversed.")
+    scopes = [(e.seat_category, e.level, e.discipline) for e in body.entries]
+    if len(scopes) != len(set(scopes)):
+        raise ApiError(422, "Rule entries cannot repeat the same category and scope.")
     if any(e.seat_category not in SUPERNUMERARY or e.rounding not in ("FLOOR", "CEIL", "NEAREST")
            for e in body.entries):
         raise ApiError(422, "Rule entries contain an unsupported category or rounding method.")
@@ -124,6 +129,8 @@ def rule_set_impact(rule_set_id: str, actor: Actor = Depends(require_roles("AICT
             ApprovedIntake.academic_year.between(rs.academic_year_from, rs.academic_year_to))).all()
     impacts = []
     for intake, programme in rows:
+        if not applies_to_academic_year(rs, intake.academic_year):
+            continue
         target = caps_from_rule_set(db, rs, intake.approved_intake, programme.discipline, programme.level)
         current = ledger.caps_for(db, intake)
         before_counts = ledger.counts_for(db, programme.id, intake.academic_year)
@@ -170,6 +177,8 @@ def activate_rule_set(rule_set_id: str, body: ActivateIn, actor: Actor = Depends
             ApprovedIntake.academic_year.between(rs.academic_year_from, rs.academic_year_to))).all()
     changed_count = 0
     for intake, programme in rows:
+        if not applies_to_academic_year(rs, intake.academic_year):
+            continue
         academic_year = db.get(AcademicYear, intake.academic_year)
         if academic_year and academic_year.is_locked:
             continue

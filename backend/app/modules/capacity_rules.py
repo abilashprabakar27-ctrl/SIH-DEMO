@@ -56,12 +56,28 @@ def seed_capacity_rules(db: Session) -> None:
 
 
 def resolve_rule_set(db: Session, academic_year: str) -> CapacityRuleSet | None:
+    try:
+        year_start = date(int(academic_year[:4]), 4, 1)
+    except (ValueError, TypeError):
+        return None
     candidates = db.execute(select(CapacityRuleSet).where(
         CapacityRuleSet.status == "ACTIVE",
         CapacityRuleSet.academic_year_from <= academic_year,
         CapacityRuleSet.academic_year_to >= academic_year,
+        CapacityRuleSet.effective_from <= year_start,
+        (CapacityRuleSet.effective_to.is_(None) | (CapacityRuleSet.effective_to >= year_start)),
     )).scalars().all()
     return candidates[0] if len(candidates) == 1 else None
+
+
+def applies_to_academic_year(rule_set: CapacityRuleSet, academic_year: str) -> bool:
+    try:
+        year_start = date(int(academic_year[:4]), 4, 1)
+    except (ValueError, TypeError):
+        return False
+    return (rule_set.academic_year_from <= academic_year <= rule_set.academic_year_to
+            and rule_set.effective_from <= year_start
+            and (rule_set.effective_to is None or rule_set.effective_to >= year_start))
 
 
 def _round(numerator: int, denominator: int, method: str) -> int:

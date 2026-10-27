@@ -32,7 +32,7 @@ from .modules import credentials, intake, ledger
 from .modules.capacity_rules import seed_capacity_rules
 from .modules.identity import phonetic_fold, swapped
 from .modules.normalize import TEMPLATE_COLUMNS, name_tokens
-from .modules.rules import seed_rules
+from .modules.rules import ensure_rule_snapshot, seed_rules
 from .security import actor_from_user, hash_api_key, hash_password, new_api_key
 
 PASSWORD = "Demo@2026"
@@ -243,6 +243,7 @@ def run(reset: bool = True, write_samples: bool = True, quiet: bool = False) -> 
     db = SessionLocal()
     try:
         seed_rules(db)
+        ensure_rule_snapshot(db, "Seed rule catalogue")
         seed_capacity_rules(db)
         insts: dict[str, Institution] = {}
         progs: dict[tuple[str, str], Programme] = {}

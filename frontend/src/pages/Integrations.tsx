@@ -22,6 +22,10 @@ export default function Integrations() {
         <p>Capacity rule sources: <strong>{system.data.capacity_rules.source_verification.toLowerCase()}</strong>.</p>
         <p>Audit trail: <strong>tamper-evident</strong>. Database-level update/delete protection is not configured.</p>
         <p><strong>Production ready: no.</strong> {system.data.production_blockers.join(" ")}</p>
+        <h3>Prototype implementation status</h3>
+        <div className="tablewrap"><table><thead><tr><th>Feature</th><th>Status</th><th>Current behavior</th></tr></thead><tbody>
+          {system.data.prototype_features?.map((f: any) => <tr key={f.feature}><td>{f.feature}</td><td><Badge v={f.state.includes("IMPLEMENTED") || f.state.includes("VERIFIED") ? "VALID" : "REVIEW"}>{f.state.replaceAll("_", " ").toLowerCase()}</Badge></td><td className="small">{f.detail}</td></tr>)}
+        </tbody></table></div>
       </section>}
     </div>
   );

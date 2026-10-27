@@ -420,6 +420,7 @@ class VerificationRequest(Base):
     student_id: Mapped[str | None] = mapped_column(ForeignKey("students.id"))
     purpose: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False)
+    consent_hold_reason: Mapped[str | None] = mapped_column(String(40))
     consent_decided_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     expires_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
     created_at: Mapped[datetime] = created()

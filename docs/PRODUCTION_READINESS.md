@@ -11,7 +11,7 @@ This is a prototype gap register based on the checked source and observed behavi
 | P5 | Rule explanation and false-positive outcome taxonomy | AICTE review owner | Yes | Flags persist calculation evidence, explanation, evidence hash and required human outcome. Rule-specific performance metrics and taxonomy validation remain incomplete. |
 | P6 | Import transaction, lock recovery, idempotence and concurrency guarantees | Engineering owner | Yes | Alembic migration, commit leases/recovery and idempotency expiry are implemented. PostgreSQL concurrency and fault guarantees still require validation. |
 | P7 | Institution authentication, national roles, isolation review and session revocation | Security owner | Yes | Local roles and scoped checks exist; no complete permission matrix or SSO/MFA. |
-| P8 | Consent purpose, notice, minors/guardian process and access-log policy | Privacy owner | Yes | Verification request consent exists; durable consent records are incomplete. To confirm with counsel. |
+| P8 | Consent purpose, notice, minors/guardian process and access-log policy | Privacy owner | Yes | Consent decisions and audit events are recorded; requests for minors are held because this prototype has no guardian workflow. Notice, policy and access-log requirements are to confirm with counsel. |
 | P9 | Retention periods, deletion/archival policy and subject requests | Privacy owner | Yes | No production retention job; retention schedule is to confirm with counsel. |
 | P10 | Credential issuer trust, managed key lifecycle, revocation/status service | Credential owner | Yes | Ed25519 prototype key; no managed key registry or production key custody. |
 | P11 | QR/share disclosure defaults, expiry, revocation, rate limits and threat review | Security owner | Yes | Existing verification path requires privacy/security review; opaque share-code lifecycle incomplete. |
@@ -26,7 +26,7 @@ This is a prototype gap register based on the checked source and observed behavi
 - CSV parsing accepts UTF-8/UTF-8 BOM and Windows-1252, comma/semicolon delimiters; XLSM, oversized XLSX archives, and external links are rejected.
 - Non-Latin-only names retain a Unicode matching key. Matching remains heuristic and requires review.
 - Capacity rules have prototype versioning and effective-date metadata, but values and application remain unverified pending an authoritative policy feed.
-- Credentials, consent, audit immutability, role matrix, retention, and end-to-end failure coverage remain production blockers.
+- Credential key lifecycle, guardian consent workflow, audit immutability, role matrix, retention, and end-to-end failure coverage remain production blockers.
 
 ## Deployment gate
 

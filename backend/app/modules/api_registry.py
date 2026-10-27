@@ -19,9 +19,11 @@ from ..models import (
     Notification,
     Programme,
     RecordRevision,
+    RuleSnapshot,
     SeatCheckLog,
     SupernumeraryQuota,
     User,
+    ValidationIssue,
     ValidationRule,
 )
 from ..security import (
@@ -38,6 +40,7 @@ from ..security import (
 )
 from . import events, issues, ledger
 from .normalize import SEAT_CATEGORIES, SUPERNUMERARY, valid_academic_year
+from .rules import ensure_rule_snapshot
 
 router = APIRouter(prefix="/api/v1", tags=["registry"])
 
@@ -298,10 +301,44 @@ def patch_rule(rule_id: str, body: RulePatch, actor: Actor = Depends(require_rol
         rule.enabled = body.enabled
     if body.severity is not None:
         rule.severity = body.severity
+    snapshot = ensure_rule_snapshot(db, f"Rule change: {rule_id}", actor.id)
     audit.record(db, actor, "rule.change", "validation_rule", rule_id,
-                 detail={"before": before, "after": {"enabled": rule.enabled, "severity": rule.severity}})
+                 detail={"before": before, "after": {"enabled": rule.enabled, "severity": rule.severity},
+                         "rules_snapshot_id": snapshot.id})
     db.commit()
     return _rule_view(rule)
+
+
+@router.get("/rules/history")
+def rule_history(actor: Actor = Depends(require_roles("AICTE_ADMIN", "AICTE_ANALYST", "AUDITOR")),
+                 db: Session = Depends(get_db)):
+    rows = db.execute(select(RuleSnapshot).order_by(RuleSnapshot.version.desc()).limit(100)).scalars()
+    return [{"id": r.id, "version": r.version, "reason": r.reason, "created_at": r.created_at.isoformat(),
+             "created_by": r.created_by, "rules": r.config} for r in rows]
+
+
+@router.get("/rules/metrics")
+def rule_metrics(actor: Actor = Depends(require_roles("AICTE_ADMIN", "AICTE_ANALYST", "AUDITOR")),
+                 db: Session = Depends(get_db)):
+    rows = db.execute(select(ValidationIssue)).scalars().all()
+    metrics = {}
+    for issue in rows:
+        m = metrics.setdefault(issue.rule_id, {"opened": 0, "resolved": 0, "false_positive": 0,
+                                                "resolution_hours": []})
+        m["opened"] += 1
+        if issue.resolution_outcome:
+            m["resolved"] += 1
+            if issue.resolution_outcome == "FALSE_POSITIVE":
+                m["false_positive"] += 1
+            if issue.updated_at:
+                hours = max(0.0, (issue.updated_at - issue.created_at).total_seconds() / 3600)
+                m["resolution_hours"].append(hours)
+    for m in metrics.values():
+        m["false_positive_percent"] = round(100 * m["false_positive"] / m["resolved"], 1) if m["resolved"] else None
+        vals = sorted(m.pop("resolution_hours"))
+        n = len(vals)
+        m["median_resolution_hours"] = round((vals[n // 2] if n % 2 else (vals[n // 2 - 1] + vals[n // 2]) / 2), 1) if n else None
+    return {"items": [{"rule_id": rid, **metrics[rid]} for rid in sorted(metrics)], "total_flags": len(rows)}
 
 
 # ---------------------------------------------------------------- notifications
