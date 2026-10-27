@@ -331,7 +331,7 @@ def review_priority(db: Session, year: str, institution_ids: list[str] | None = 
                                "z": None if z is None else round(z, 2)})
             if z is not None and abs(z) > 3.5:
                 sig(f"peer_{key}", f"Unusual {label}", 8,
-                    f"{label.capitalize()} {m[key]:.0%} vs peer median {med:.0%} (robust z {z:+.1f}).",
+                    f"{label[0].upper() + label[1:]} {m[key]:.0%} vs peer median {med:.0%} (robust z {z:+.1f}).",
                     {"z": round(z, 2)})
         score = min(100, sum(s["points"] for s in signals))
         band = "HIGH" if score >= 50 else "MEDIUM" if score >= 25 else "LOW"

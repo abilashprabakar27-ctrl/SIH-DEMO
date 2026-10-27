@@ -66,7 +66,8 @@ code, .mono { font-family: var(--mono); font-size: 13px; }
 .muted { color: var(--ink-2); }
 .small { font-size: 13px; }
 .right { text-align: right; }
-.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; overflow-x: auto; }
+.grid > * { min-width: 0; }
 .card.flat { padding: 0; overflow: hidden; }
 .pagehead { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
 
